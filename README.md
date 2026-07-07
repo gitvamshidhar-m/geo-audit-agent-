@@ -1,3 +1,14 @@
+---
+title: GEO Audit Agent
+emoji: 🐠
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # GEO Audit Agent
 
 Ensure your web pages are fully optimized for AI-driven search with the GEO Audit Agent. Crawl any website, analyze SEO/GEO readiness, and get a prioritized action plan.
