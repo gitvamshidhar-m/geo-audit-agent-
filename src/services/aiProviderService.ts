@@ -1,10 +1,10 @@
-import { GoogleGenAI, Type } from "@google/genai";
+﻿import { GoogleGenAI, Type } from "@google/genai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import Groq from "groq-sdk";
 import { HfInference } from "@huggingface/inference";
-import { SEOPage, AuditStats } from "../types/seo";
-import { chunkPagesForRAG, queryRAGIndex, buildRAGPrompt } from "./ragService";
+import { SEOPage, AuditStats } from "../types/seo.js";
+import { chunkPagesForRAG, queryRAGIndex, buildRAGPrompt } from "./ragService.js";
 
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'huggingface' | 'deepseek' | 'perplexity';
 

@@ -1,4 +1,4 @@
-import { analyzeHTML } from './src/services/analyzer';
+﻿import { analyzeHTML } from './src/services/analyzer.js';
 const html = `
 <html>
 <head><title>Test</title></head>

@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { SEOPage, SEOIssue, SEOImage } from "../types/seo.js";
+import { SEOPage, SEOIssue } from "../types/seo.js";
 
 export function analyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>): SEOPage {
   const $ = cheerio.load(html);

@@ -1,8 +1,8 @@
-import { GoogleGenAI } from "@google/genai";
-import { SEOPage, AuditStats } from "../types/seo";
+﻿import { GoogleGenAI } from "@google/genai";
+import { SEOPage, AuditStats } from "../types/seo.js";
 
-import { CrewAIEngine, CrewAgent, CrewTask } from "./crewAIEngine";
-import { chunkPagesForRAG, queryRAGIndex, buildRAGPrompt } from "./ragService";
+import { CrewAIEngine, CrewAgent, CrewTask } from "./crewAIEngine.js";
+import { chunkPagesForRAG, queryRAGIndex, buildRAGPrompt } from "./ragService.js";
 
 async function retry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
   try {

@@ -1,4 +1,4 @@
-import { SEOPage } from "../types/seo";
+﻿import { SEOPage } from "../types/seo.js";
 
 export interface RAGChunk {
   id: string;

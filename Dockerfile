@@ -1,24 +1,26 @@
 FROM node:20-bookworm
 
-# Install dependencies for Playwright/Chromium
-RUN npx -y playwright@1.59.1 install --with-deps chromium
+# Install Playwright dependencies + Chromium
+RUN npx playwright@1.59.1 install --with-deps chromium
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install npm dependencies (including devDependencies needed for build)
-RUN npm ci
+# Install dependencies
+RUN npm install
 
-# Copy the rest of the application
+# Copy rest of the application
 COPY . .
 
-# Build the application
+# Build the app
 RUN npm run build
 
-# Expose port
-EXPOSE 3000
+# Hugging Face Spaces uses port 7860
+ENV PORT=7860
+ENV NODE_ENV=production
 
-# Start the application
+EXPOSE 7860
+
 CMD ["npm", "start"]

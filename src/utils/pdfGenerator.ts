@@ -1,6 +1,6 @@
-import { jsPDF } from 'jspdf';
+﻿import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { SEOPage, AuditStats, AIInsightData, GEOResult } from '../types/seo';
+import { SEOPage, AuditStats, AIInsightData, GEOResult } from '../types/seo.js';
 
 export function generateSEOReportPDF(domain: string, pages: SEOPage[], stats: AuditStats, aiInsight: any, auditEndTime: number | null) {
   const doc = new jsPDF();
@@ -144,7 +144,7 @@ export function generateSEOReportPDF(domain: string, pages: SEOPage[], stats: Au
   doc.setFontSize(9);
   doc.setTextColor(51, 65, 85);
   const quickWins = [
-    "- FAQ schema on feature pages — can become FAQ rich snippets with near-zero content change.",
+    "- FAQ schema on feature pages â€” can become FAQ rich snippets with near-zero content change.",
     "- SoftwareApplication schema on homepage & pricing.",
     "- Article schema on all blog posts via JSON-LD injection.",
     "- Internal links from blog -> product pages.",

@@ -3,8 +3,8 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import fetch from "node-fetch";
 import pLimit from "p-limit";
 import { analyzeHTML } from "./analyzer.js";
-import * as db from "./storage.js";
 
+import * as db from "./storage.js";
 // Use stealth plugin for Playwright
 chromium.use(StealthPlugin());
 

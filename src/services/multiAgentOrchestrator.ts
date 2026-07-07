@@ -1,5 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-import { AuditStats, SEOPage } from "../types/seo";
+﻿import { GoogleGenAI } from "@google/genai";
+import { AuditStats, SEOPage } from "../types/seo.js";
 
 export interface Agent {
   name: string;

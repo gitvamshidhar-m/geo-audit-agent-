@@ -1,5 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { SEOPage, AuditStats } from "../types/seo";
+﻿import { GoogleGenAI, Type } from "@google/genai";
+import { SEOPage, AuditStats } from "../types/seo.js";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
