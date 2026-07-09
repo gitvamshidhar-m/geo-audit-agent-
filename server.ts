@@ -437,9 +437,10 @@ async function startServer() {
 
   app.post("/api/audit/start", async (req, res) => {
     const userId = (req.headers["x-user-id"] as string) || "public";
-    let { url, depth, maxPages } = req.body;
+    let { url, depth, maxPages, quick } = req.body;
     depth = Number(depth) || 10;
     maxPages = Number(maxPages) || 1000;
+    quick = quick === true || quick === "true";
     if (!url) return res.status(400).json({ error: "URL is required" });
 
     try {
@@ -448,7 +449,7 @@ async function startServer() {
       depth = Math.min(10, depth);
 
       // Start background crawl
-      crawler.audit(url, { depth, maxPages, userId }).catch(console.error);
+      crawler.audit(url, { depth, maxPages, userId, quick }).catch(console.error);
       res.json({ message: "Audit started", url });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

@@ -130,6 +130,7 @@ export default function App() {
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(1000);
   const [depth, setDepth] = useState(10);
+  const [quick, setQuick] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
   const [currentCrawlingUrl, setCurrentCrawlingUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -395,7 +396,7 @@ export default function App() {
       const res = await apiFetch('/api/audit/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, depth, maxPages })
+        body: JSON.stringify({ url: targetUrl, depth, maxPages, quick })
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -765,6 +766,17 @@ export default function App() {
                   className="w-12 bg-transparent text-sm font-black text-slate-700 outline-none"
                 />
               </div>
+              <div className="hidden xl:flex items-center px-3 shrink-0">
+                <button
+                  onClick={() => setQuick(!quick)}
+                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all ${
+                    quick ? 'bg-amber-400 text-amber-900' : 'bg-slate-100 text-slate-400'
+                  }`}
+                  title="Quick mode skips scroll animations and idle waits for faster crawling"
+                >
+                  {quick ? 'Quick' : 'Full'}
+                </button>
+              </div>
               <div className="relative h-full flex-1 flex items-center px-3 sm:px-5 min-w-0">
                 <Globe size={18} className="text-slate-400 group-focus-within:text-blue-600 transition-colors shrink-0" />
                 <input 
@@ -795,7 +807,17 @@ export default function App() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setQuick(!quick)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                quick ? 'bg-amber-400 text-amber-900' : 'bg-slate-50 border border-slate-200 text-slate-400'
+              }`}
+              title={quick ? 'Quick mode: no scroll animation delays' : 'Full mode: includes scroll animation delays (slower)'}
+            >
+              <Zap size={12} className={quick ? '' : 'text-slate-400'} />
+              {quick ? 'Quick' : 'Full'}
+            </button>
             <button 
               onClick={() => setShowSettings(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all group"

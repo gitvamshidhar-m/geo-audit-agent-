@@ -18,10 +18,11 @@ interface AuditConfig {
   depth: number;
   maxPages: number;
   userId?: string;
+  quick?: boolean;
 }
 
 export async function audit(startUrl: string, config: AuditConfig) {
-  const { depth, maxPages, userId = "public" } = config;
+  const { depth, maxPages, userId = "public", quick = false } = config;
   const visited = new Set<string>();
 
   let startUrlNormalized = startUrl.trim().replace(/\/$/, "").toLowerCase();
@@ -351,26 +352,22 @@ export async function audit(startUrl: string, config: AuditConfig) {
                     progress,
                     `Bypassing Cloudflare Challenge: ${url}`,
                   ).catch(() => {});
-                  await page.waitForTimeout(3000);
-                  await page.mouse
-                    .move(Math.random() * 500, Math.random() * 500)
-                    .catch(() => {});
-                  await page.waitForTimeout(200);
-                  await page.mouse
-                    .click(Math.random() * 500, Math.random() * 500)
-                    .catch(() => {});
-                  await page.waitForTimeout(1000);
+                  if (!quick) {
+                    await page.waitForTimeout(3000);
+                    await page.mouse.move(Math.random() * 500, Math.random() * 500).catch(() => {});
+                    await page.waitForTimeout(200);
+                    await page.mouse.click(Math.random() * 500, Math.random() * 500).catch(() => {});
+                    await page.waitForTimeout(1000);
+                  }
                 } else if (isRoot) {
-                  // Only add landing warmup/scroll for the root page
-                  await page.waitForTimeout(400);
-                  await page
-                    .evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2))
-                    .catch(() => {});
-                  await page.waitForTimeout(200);
-                  await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+                  if (!quick) {
+                    await page.waitForTimeout(400);
+                    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2)).catch(() => {});
+                    await page.waitForTimeout(200);
+                    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+                  }
                 } else {
-                  // Let SPAs render links on deeper pages too
-                  await page.waitForTimeout(300);
+                  if (!quick) await page.waitForTimeout(300);
                 }
 
                 finalUrl = page.url();
