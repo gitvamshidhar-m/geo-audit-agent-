@@ -219,14 +219,14 @@ export async function audit(startUrl: string, config: AuditConfig) {
           const text = await response.text();
 
           const lower = text.toLowerCase();
-          // Relaxed validation: If it's got a reasonable amount of content, it's likely not a block
-          const looksLikeABlock =
+          const looksLikeABlock = !quick && (
             text.length < 5000 &&
             (lower.includes("security check") ||
               lower.includes("cloudflare") ||
-              (lower.includes("captcha") && text.length < 2000));
+              (lower.includes("captcha") && text.length < 2000))
+          );
 
-          if (text.length > 50 && !looksLikeABlock) {
+          if (quick || (text.length > 50 && !looksLikeABlock)) {
             htmlContent = text;
             headersMap["x-actual-status"] = response.status.toString();
             response.headers.forEach((v, k) => {
@@ -260,8 +260,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
       const isLikelySPA = htmlContent && htmlContent.length < 3000 && htmlContent.toLowerCase().includes('<script');
 
       if (!htmlContent || isLikelySPA) {
-        // In Quick mode, only use Playwright for the root page
-        if (quick && !isRoot) {
+        // In Quick mode, skip Playwright entirely - use raw fetch only
+        if (quick) {
           if (!htmlContent) htmlContent = "";
         } else {
           // Wait if too many Playwright instances are running to prevent memory crashes
