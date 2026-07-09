@@ -351,26 +351,26 @@ export async function audit(startUrl: string, config: AuditConfig) {
                     progress,
                     `Bypassing Cloudflare Challenge: ${url}`,
                   ).catch(() => {});
-                  await page.waitForTimeout(5000);
+                  await page.waitForTimeout(3000);
                   await page.mouse
                     .move(Math.random() * 500, Math.random() * 500)
                     .catch(() => {});
-                  await page.waitForTimeout(500);
+                  await page.waitForTimeout(200);
                   await page.mouse
                     .click(Math.random() * 500, Math.random() * 500)
                     .catch(() => {});
-                  await page.waitForTimeout(2000);
+                  await page.waitForTimeout(1000);
                 } else if (isRoot) {
                   // Only add landing warmup/scroll for the root page
-                  await page.waitForTimeout(1000);
+                  await page.waitForTimeout(400);
                   await page
                     .evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2))
                     .catch(() => {});
-                  await page.waitForTimeout(500);
+                  await page.waitForTimeout(200);
                   await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
                 } else {
                   // Let SPAs render links on deeper pages too
-                  await page.waitForTimeout(1000);
+                  await page.waitForTimeout(300);
                 }
 
                 finalUrl = page.url();
