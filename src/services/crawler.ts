@@ -278,6 +278,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
                       "--no-sandbox",
                       "--disable-setuid-sandbox",
                       "--disable-dev-shm-usage",
+                      "--single-process",
                       "--disable-web-security",
                       "--disable-features=IsolateOrigins,site-per-process",
                       "--disable-blink-features=AutomationControlled",
