@@ -509,6 +509,15 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[READY] GEO Audit Agent Server listening on http://0.0.0.0:${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+    // Self-keepalive ping every 10 minutes
+    const baseUrl = `http://localhost:${PORT}`;
+    setInterval(async () => {
+      try {
+        const resp = await fetch(`${baseUrl}/api/health`);
+        console.log(`[Keepalive] pinged self: ${resp.status}`);
+      } catch { /* ignore */ }
+    }, 10 * 60 * 1000);
   });
   } catch (error) {
     console.error("FATAL: Failed to start server:", error);
