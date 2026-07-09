@@ -50,7 +50,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
     const baseUrl = new URL(startUrlNormalized).origin;
 
     const robotsCtrl = new AbortController();
-    const robotsTimer = setTimeout(() => robotsCtrl.abort(), 8000);
+    const robotsTimer = setTimeout(() => robotsCtrl.abort(), quick ? 3000 : 8000);
     const robotsRes = await fetch(`${baseUrl}/robots.txt`, {
       headers: {
         "User-Agent": userAgents[0],
@@ -70,7 +70,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
       if (depth > 3) return []; // Increased depth for massive sites
       try {
         const sController = new AbortController();
-        const sTimeout = setTimeout(() => sController.abort(), 10000);
+        const sTimeout = setTimeout(() => sController.abort(), quick ? 4000 : 10000);
         const sRes = await fetch(sUrl, {
           headers: {
             "User-Agent":
@@ -129,7 +129,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
     ];
 
     await Promise.all(commonSitemaps.map(async (path) => {
-      if (sitemapUrls.length > 1000) return;
+      if (sitemapUrls.length > (quick ? 50 : 1000)) return;
       const urls = await fetchSitemapUrls(`${baseUrl}${path}`);
       if (urls.length > 0) {
         sitemapUrls = sitemapUrls.concat(urls);
@@ -332,7 +332,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
               try {
                 let resp = await page
-                  .goto(url, { waitUntil: "domcontentloaded", timeout: 15000 })
+                  .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 8000 : 15000 })
                   .catch((err) => {
                     lastErrorMessage = err.message || "Playwright goto failed";
                     return null;
@@ -417,7 +417,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           if (
             !visited.has(linkKey) &&
             !visited.has(linkNoWww) &&
-            processedCount + queue.length < maxPages * 10
+            processedCount + queue.length < maxPages * (quick ? 3 : 10)
           ) {
             visited.add(linkKey);
             visited.add(linkNoWww);
@@ -490,16 +490,17 @@ export async function audit(startUrl: string, config: AuditConfig) {
   }
 
   const runWorker = async () => {
+    const idleDelay = quick ? 50 : 1000;
+    const loopDelay = quick ? 20 : 500;
     while (startedCount < maxPages) {
       const task = queue.shift();
       if (!task) {
-        // If queue is empty, wait and check if others are still working
         if (activeWorkers === 0) {
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise((r) => setTimeout(r, idleDelay));
           if (queue.length === 0 && activeWorkers === 0) break;
           continue;
         }
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, loopDelay));
         continue;
       }
 
@@ -507,8 +508,6 @@ export async function audit(startUrl: string, config: AuditConfig) {
       activeWorkers++;
       try {
         await getPageData(task.url, task.currentDepth);
-        // Minimal delay to prevent freezing
-        await new Promise((r) => setTimeout(r, 10));
       } catch (err) {
         console.error("Worker process error:", err);
       } finally {
