@@ -24,6 +24,7 @@ interface AuditConfig {
 export async function audit(startUrl: string, config: AuditConfig) {
   const { depth, maxPages, userId = "public", quick = false } = config;
   const visited = new Set<string>();
+  let sharedContext: any = null;
 
   let startUrlNormalized = startUrl.trim().replace(/\/$/, "").toLowerCase();
   if (
@@ -260,8 +261,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
       if (!htmlContent || isLikelySPA) {
         // Wait if too many Playwright instances are running to prevent memory crashes
-        while (activePlaywrights >= 8) {
-           await new Promise((r) => setTimeout(r, 100));
+        while (activePlaywrights >= (quick ? 20 : 8)) {
+           await new Promise((r) => setTimeout(r, 50));
         }
         activePlaywrights++;
 
@@ -297,16 +298,18 @@ export async function audit(startUrl: string, config: AuditConfig) {
             }
 
             if (browser) {
-              const context = await browser.newContext({
-                userAgent:
-                  userAgents[Math.floor(Math.random() * userAgents.length)],
-                viewport: { width: 1280, height: 800 },
-                extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
-                bypassCSP: true,
-                ignoreHTTPSErrors: true,
-              });
+              if (!sharedContext) {
+                sharedContext = await browser.newContext({
+                  userAgent:
+                    userAgents[Math.floor(Math.random() * userAgents.length)],
+                  viewport: { width: 1280, height: 800 },
+                  extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+                  bypassCSP: true,
+                  ignoreHTTPSErrors: true,
+                });
+              }
 
-              const page = await context.newPage();
+              const page = await sharedContext.newPage();
 
               // Optimization: Block heavy resources and non-essential trackers/analytics to speed up crawl tremendously
               await page.route('**/*', (route) => {
@@ -388,7 +391,6 @@ export async function audit(startUrl: string, config: AuditConfig) {
                 lastErrorMessage = pwErr.message || "Playwright headless crash or error";
               } finally {
                 await page?.close().catch(() => {});
-                await context?.close().catch(() => {});
               }
             }
           } finally {
@@ -517,13 +519,14 @@ export async function audit(startUrl: string, config: AuditConfig) {
   };
 
   try {
-    const workerCount = process.env.RENDER || process.env.NODE_ENV === 'production' ? 12 : 20; // Increase concurrency heavily since most requests use fetch
+    const workerCount = quick ? 30 : (process.env.RENDER || process.env.NODE_ENV === 'production' ? 12 : 20); // Increase concurrency heavily since most requests use fetch
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.all(workers);
   } catch (error) {
     console.error("Audit error:", error);
   } finally {
     if (browser) await browser.close().catch(() => {});
+    if (sharedContext) await sharedContext.close().catch(() => {});
     await db.updateStatus(userId, false, 100, "Completed");
   }
 }
