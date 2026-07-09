@@ -260,13 +260,17 @@ export async function audit(startUrl: string, config: AuditConfig) {
       const isLikelySPA = htmlContent && htmlContent.length < 3000 && htmlContent.toLowerCase().includes('<script');
 
       if (!htmlContent || isLikelySPA) {
-        // Wait if too many Playwright instances are running to prevent memory crashes
-        while (activePlaywrights >= (quick ? 20 : 8)) {
-           await new Promise((r) => setTimeout(r, 50));
-        }
-        activePlaywrights++;
+        // In Quick mode, only use Playwright for the root page
+        if (quick && !isRoot) {
+          if (!htmlContent) htmlContent = "";
+        } else {
+          // Wait if too many Playwright instances are running to prevent memory crashes
+          while (activePlaywrights >= (quick ? 20 : 8)) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          activePlaywrights++;
 
-        try {
+          try {
             if (!browser) {
               while (isLaunchingBrowser) {
                 await new Promise((r) => setTimeout(r, 100));
@@ -397,6 +401,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
             activePlaywrights--;
           }
         }
+      }
     } catch (e: any) {
       console.error(`Outer crawl logic failed for ${url}:`, e.message);
       lastErrorMessage = e.message || "Unknown crawl error";
