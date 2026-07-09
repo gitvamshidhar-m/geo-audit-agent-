@@ -9,7 +9,8 @@
     "start": "NODE_ENV=production node node_modules/tsx/dist/cli.mjs server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "postinstall": "npx playwright install chromium"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
