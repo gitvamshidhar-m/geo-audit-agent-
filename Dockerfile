@@ -1,5 +1,6 @@
 FROM node:20-bookworm
 
+# Install Playwright Chromium with all system dependencies
 RUN npx playwright@1.59.1 install --with-deps chromium
 
 WORKDIR /app
@@ -9,8 +10,11 @@ RUN npm install
 
 COPY . .
 
-ENV PORT=7860
+# Build the Vite frontend
+RUN npm run build
 
-EXPOSE 7860
+ENV NODE_ENV=production
 
-CMD ["npm", "run", "dev"]
+EXPOSE 8080
+
+CMD ["npm", "start"]
