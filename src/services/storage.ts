@@ -217,10 +217,10 @@ export async function getStats(userId: string) {
     totalHeadings.h5 += (p.headers?.h5 || []).length;
     totalHeadings.h6 += (p.headers?.h6 || []).length;
 
-    // Load Time
+    // Load Time (relaxed: <3s = fast, <6s = moderate, >=6s = slow)
     const lt = p.loadTime || 0;
-    if (lt < 1000) loadTimeDistribution.fast++;
-    else if (lt < 3000) loadTimeDistribution.moderate++;
+    if (lt < 3000) loadTimeDistribution.fast++;
+    else if (lt < 6000) loadTimeDistribution.moderate++;
     else loadTimeDistribution.slow++;
 
     // Coverage
