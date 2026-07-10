@@ -1,5 +1,6 @@
 import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import fetch from "node-fetch";
 import { analyzeHTML, quickAnalyzeHTML } from "./analyzer.js";
 
 import * as db from "./storage.js";
@@ -15,14 +16,6 @@ const fetchHeaders = {
   "User-Agent": userAgents[0],
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
   "Accept-Language": "en-US,en;q=0.9",
-  "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
-  "Sec-Ch-Ua-Mobile": "?0",
-  "Sec-Ch-Ua-Platform": '"Windows"',
-  "Sec-Fetch-Dest": "document",
-  "Sec-Fetch-Mode": "navigate",
-  "Sec-Fetch-Site": "none",
-  "Sec-Fetch-User": "?1",
-  "Upgrade-Insecure-Requests": "1",
 };
 
 interface AuditConfig {
@@ -60,19 +53,25 @@ export async function audit(startUrl: string, config: AuditConfig) {
   const sitemapPromise = (async () => {
     try {
       const baseUrl = new URL(startUrlNormalized).origin;
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), quick ? 2000 : 5000);
       const robotsRes = await fetch(`${baseUrl}/robots.txt`, {
         headers: { "User-Agent": userAgents[0], Accept: "text/plain,text/html,*/*" },
-        signal: AbortSignal.timeout(quick ? 2000 : 5000),
+        signal: ac.signal,
       }).catch(() => null);
+      clearTimeout(tid);
       hasRobots = robotsRes?.ok || false;
 
       let sitemapCount = 0;
       const fetchSitemap = async (sUrl: string, d = 0): Promise<string[]> => {
         if (d > 2 || sitemapCount > (quick ? 1000 : 5000)) return [];
+        const ac2 = new AbortController();
+        const st2 = setTimeout(() => ac2.abort(), quick ? 2000 : 6000);
         const sr = await fetch(sUrl, {
           headers: { "User-Agent": userAgents[0], Accept: "application/xml,text/xml,*/*" },
-          signal: AbortSignal.timeout(quick ? 2000 : 6000),
+          signal: ac2.signal,
         }).catch(() => null);
+        clearTimeout(st2);
         if (!sr?.ok) return [];
         const txt = await sr.text();
         const locs = txt.match(/<loc>(https?:\/\/[^<]+)<\/loc>/g);
@@ -172,13 +171,16 @@ export async function audit(startUrl: string, config: AuditConfig) {
     let lastErrorMessage = "";
 
     try {
-      // Try native fetch first (Fast) with AbortSignal.timeout
+      // Try fetch first (Fast) with AbortController timeout
       try {
+        const ac3 = new AbortController();
+        const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 15000);
         const response = await fetch(url, {
           headers: fetchHeaders,
-          signal: AbortSignal.timeout(quick ? 8000 : 15000),
+          signal: ac3.signal,
           redirect: "follow",
         });
+        clearTimeout(t3);
 
         if (response.status) {
           finalUrl = response.url;
