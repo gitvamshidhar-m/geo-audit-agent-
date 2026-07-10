@@ -554,8 +554,11 @@ export default function App() {
 
   const handleExportJSON = () => {
     setShowExportMenu(false);
+    if (!stats || pages.length === 0) return;
     const data = { stats, pages, timestamp: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    let json: string;
+    try { json = JSON.stringify(data, null, 2); } catch { alert("Failed to serialize data for export"); return; }
+    const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
