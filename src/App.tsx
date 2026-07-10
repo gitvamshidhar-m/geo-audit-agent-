@@ -144,13 +144,27 @@ export default function App() {
   const [auditStartTime, setAuditStartTime] = useState<number | null>(null);
   const [auditEndTime, setAuditEndTime] = useState<number | null>(null);
   const [auditElapsedTime, setAuditElapsedTime] = useState<number>(0);
-  const [comparisons, setComparisons] = useState<{ url: string; timestamp: string; stats: AuditStats; pagesCount: number }[]>([]);
+  const [comparisons, setComparisons] = useState<{ url: string; timestamp: string; metrics: Record<string, any>; pagesCount: number }[]>([]);
 
   const saveComparison = () => {
     if (!stats || !url) return;
+    const metrics: Record<string, any> = {
+      totalPages: stats.totalPages,
+      averageScore: stats.averageScore,
+      criticalIssues: stats.criticalIssues,
+      warningIssues: stats.warningIssues,
+      seoVisibilityScore: stats.seoVisibilityScore,
+      geoScore: stats.geoScore,
+      aiRecognitionScore: stats.aiRecognitionScore,
+      structuredDataCoverage: stats.structuredDataCoverage,
+      socialGraphCoverage: stats.socialGraphCoverage,
+      brokenLinksCount: stats.brokenLinksCount,
+      hasRobots: stats.hasRobots,
+      hasSitemap: stats.hasSitemap,
+    };
     setComparisons(prev => {
       const filtered = prev.filter(c => c.url !== url);
-      return [{ url, timestamp: new Date().toISOString(), stats, pagesCount: pages.length }, ...filtered].slice(0, 5);
+      return [{ url, timestamp: new Date().toISOString(), metrics, pagesCount: pages.length }, ...filtered].slice(0, 5);
     });
   };
 
@@ -2128,13 +2142,13 @@ export default function App() {
                           ].map(row => (
                             <tr key={row.key} className="border-b border-slate-100 hover:bg-slate-50">
                               <td className="py-2.5 px-4 font-bold text-slate-600">{row.label}</td>
-                              {comparisons.map(c => {
-                                const val = (c.stats as any)[row.key];
-                                let display: string;
-                                if (row.boolean) display = val ? '✅' : '❌';
-                                else display = val !== undefined && val !== null ? String(val) + (row.suffix || '') : '—';
-                                return <td key={c.url} className="text-center py-2.5 px-4 font-mono font-bold text-slate-800">{display}</td>;
-                              })}
+                          {comparisons.map(c => {
+                            const val = (c.metrics as any)[row.key];
+                            let display: string;
+                            if (row.boolean) display = val ? '✅' : '❌';
+                            else display = val !== undefined && val !== null ? String(val) + (row.suffix || '') : '—';
+                            return <td key={c.url} className="text-center py-2.5 px-4 font-mono font-bold text-slate-800">{display}</td>;
+                          })}
                             </tr>
                           ))}
                         </tbody>

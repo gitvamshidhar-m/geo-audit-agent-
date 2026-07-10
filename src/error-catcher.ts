@@ -17,11 +17,8 @@ window.addEventListener('unhandledrejection', (e) => {
     msg = 'No reason provided for rejection';
   }
 
-  // Ignore benign Vite HMR websocket errors
-  if (typeof msg === 'string' && (msg.toLowerCase().includes('websocket closed') || msg.toLowerCase().includes('websocket'))) {
-    e.preventDefault();
-    return;
-  }
+  e.preventDefault();
+  if (typeof msg === 'string' && (msg.toLowerCase().includes('websocket closed') || msg.toLowerCase().includes('websocket'))) return;
 
   fetch('/api/log', { method: 'POST', body: safeStringify({ message: msg, stack, type: 'unhandledrejection' }), headers: { 'Content-Type': 'application/json' } }).catch(() => {});
 });
