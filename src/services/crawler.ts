@@ -1,15 +1,9 @@
 import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import fetch from "node-fetch";
-import { Agent as HttpAgent } from "http";
-import { Agent as HttpsAgent } from "https";
 import { analyzeHTML, quickAnalyzeHTML } from "./analyzer.js";
 
 import * as db from "./storage.js";
 chromium.use(StealthPlugin());
-
-const keepAliveAgent = new HttpsAgent({ keepAlive: true, maxSockets: 50, timeout: 15000 });
-const keepAliveAgentHttp = new HttpAgent({ keepAlive: true, maxSockets: 50, timeout: 15000 });
 
 const userAgents = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -66,27 +60,19 @@ export async function audit(startUrl: string, config: AuditConfig) {
   const sitemapPromise = (async () => {
     try {
       const baseUrl = new URL(startUrlNormalized).origin;
-      const robotsCtrl = new AbortController();
-      const robotsTimer = setTimeout(() => robotsCtrl.abort(), quick ? 2000 : 5000);
       const robotsRes = await fetch(`${baseUrl}/robots.txt`, {
         headers: { "User-Agent": userAgents[0], Accept: "text/plain,text/html,*/*" },
-        signal: robotsCtrl.signal,
-        agent: baseUrl.startsWith("https") ? keepAliveAgent : keepAliveAgentHttp,
+        signal: AbortSignal.timeout(quick ? 2000 : 5000),
       }).catch(() => null);
-      clearTimeout(robotsTimer);
       hasRobots = robotsRes?.ok || false;
 
       let sitemapCount = 0;
       const fetchSitemap = async (sUrl: string, d = 0): Promise<string[]> => {
         if (d > 2 || sitemapCount > (quick ? 1000 : 5000)) return [];
-        const sc = new AbortController();
-        const st = setTimeout(() => sc.abort(), quick ? 2000 : 6000);
         const sr = await fetch(sUrl, {
           headers: { "User-Agent": userAgents[0], Accept: "application/xml,text/xml,*/*" },
-          signal: sc.signal,
-          agent: sUrl.startsWith("https") ? keepAliveAgent : keepAliveAgentHttp,
+          signal: AbortSignal.timeout(quick ? 2000 : 6000),
         }).catch(() => null);
-        clearTimeout(st);
         if (!sr?.ok) return [];
         const txt = await sr.text();
         const locs = txt.match(/<loc>(https?:\/\/[^<]+)<\/loc>/g);
@@ -186,18 +172,13 @@ export async function audit(startUrl: string, config: AuditConfig) {
     let lastErrorMessage = "";
 
     try {
-      // Try fetch first (Fast) with connection reuse
+      // Try native fetch first (Fast) with AbortSignal.timeout
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), quick ? 8000 : 15000);
-
         const response = await fetch(url, {
           headers: fetchHeaders,
-          signal: controller.signal,
+          signal: AbortSignal.timeout(quick ? 8000 : 15000),
           redirect: "follow",
-          agent: url.startsWith("https") ? keepAliveAgent : keepAliveAgentHttp,
         });
-        clearTimeout(timeout);
 
         if (response.status) {
           finalUrl = response.url;
