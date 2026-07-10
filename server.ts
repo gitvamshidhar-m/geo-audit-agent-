@@ -437,20 +437,43 @@ async function startServer() {
 
   app.post("/api/audit/start", async (req, res) => {
     const userId = (req.headers["x-user-id"] as string) || "public";
-    let { url, depth, maxPages, quick } = req.body;
+    let { url, depth, maxPages, quick, force } = req.body;
     depth = Number(depth) || 10;
     maxPages = Number(maxPages) || 1000;
     quick = quick === true || quick === "true";
+    force = force === true || force === "true";
     if (!url) return res.status(400).json({ error: "URL is required" });
 
     try {
-      // Safe maximum boundaries for crawling performance
       maxPages = Math.min(1000, maxPages);
       depth = Math.min(10, depth);
 
-      // Start background crawl
-      crawler.audit(url, { depth, maxPages, userId, quick }).catch(console.error);
-      res.json({ message: "Audit started", url });
+      // Check for cached audit (skip if same URL crawled within 60 min, unless force)
+      if (!force) {
+        const cached = await db.isCachedAudit(userId, url);
+        if (cached) {
+          return res.json({ message: "Cached audit loaded", url, cached: true });
+        }
+      }
+
+      // Check for interrupted crawl to resume
+      const status = await db.getAuditStatus(userId);
+      let resumeState = null;
+      if (status.is_running && status.progress > 0 && status.progress < 100) {
+        resumeState = await db.getCrawlState(userId);
+      }
+
+      if (resumeState) {
+        // Resume interrupted crawl
+        console.log(`Resuming crawl for ${userId} at progress ${status.progress}`);
+        crawler.audit(url, { depth, maxPages, userId, quick, resumeState }).catch(console.error);
+        res.json({ message: "Audit resumed", url, resumed: true, progress: status.progress });
+      } else {
+        // Fresh crawl
+        db.resetData(userId).catch(() => {});
+        crawler.audit(url, { depth, maxPages, userId, quick }).catch(console.error);
+        res.json({ message: "Audit started", url });
+      }
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -487,6 +510,62 @@ async function startServer() {
     } catch (err: any) {
       console.error("Reset error:", err);
       res.status(500).json({ error: err.message || "Failed to reset data" });
+    }
+  });
+
+  app.get("/api/audit/export/csv", async (req, res) => {
+    const userId = (req.headers["x-user-id"] as string) || "public";
+    try {
+      const pages = await db.getPages(userId);
+      const stats = await db.getStats(userId);
+      let csv = "URL,Title,Score,Word Count,Load Time (ms),Status Code,Canonical,Description\n";
+      pages.forEach((p: any) => {
+        const desc = (p.description || "").replace(/"/g, '""');
+        const title = (p.title || "").replace(/"/g, '""');
+        csv += `"${p.url}","${title}",${p.score || 0},${p.wordCount || 0},${p.loadTime || 0},${p.statusCode || 0},"${desc}"\n`;
+      });
+      csv += `\n--- Summary ---\n`;
+      csv += `Total Pages,${stats.totalPages}\n`;
+      csv += `Average Score,${stats.averageScore}\n`;
+      csv += `Critical Issues,${stats.criticalIssues}\n`;
+      csv += `Warning Issues,${stats.warningIssues}\n`;
+      csv += `SEO Visibility Score,${stats.seoVisibilityScore}\n`;
+      csv += `GEO Score,${stats.geoScore}\n`;
+      csv += `AI Recognition Score,${stats.aiRecognitionScore}\n`;
+      csv += `Structured Data Coverage,${stats.structuredDataCoverage}%\n`;
+      csv += `Social Graph Coverage,${stats.socialGraphCoverage}%\n`;
+      csv += `Broken Links,${stats.brokenLinksCount}\n`;
+      csv += `Has Robots.txt,${stats.hasRobots}\n`;
+      csv += `Has Sitemap,${stats.hasSitemap}\n`;
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=seo-audit.csv");
+      res.send(csv);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/audit/history", async (req, res) => {
+    const userId = (req.headers["x-user-id"] as string) || "public";
+    try {
+      const history = await db.getAuditHistory(userId);
+      res.json(history);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/audit/export/json", async (req, res) => {
+    const userId = (req.headers["x-user-id"] as string) || "public";
+    try {
+      const pages = await db.getPages(userId);
+      const stats = await db.getStats(userId);
+      const data = { stats, pages, timestamp: new Date().toISOString() };
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", "attachment; filename=seo-audit.json");
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 

@@ -23,10 +23,11 @@ interface AuditConfig {
   maxPages: number;
   userId?: string;
   quick?: boolean;
+  resumeState?: { queue: { url: string; currentDepth: number }[]; visited: string[]; processedCount: number } | null;
 }
 
 export async function audit(startUrl: string, config: AuditConfig) {
-  const { depth, maxPages, userId = "public", quick = false } = config;
+  const { depth, maxPages, userId = "public", quick = false, resumeState } = config;
   const visited = new Set<string>();
   let sharedContext: any = null;
 
@@ -38,13 +39,19 @@ export async function audit(startUrl: string, config: AuditConfig) {
     startUrlNormalized = `https://${startUrlNormalized}`;
   }
 
-  // Ensure root is in visited
-  visited.add(startUrlNormalized);
-  const queue: { url: string; currentDepth: number }[] = [
-    { url: startUrlNormalized, currentDepth: 0 },
-  ];
+  // Restore resume state if available
+  if (resumeState && resumeState.queue?.length > 0) {
+    resumeState.visited.forEach((v: string) => visited.add(v));
+    console.log(`Restored crawl state: ${visited.size} visited, ${resumeState.queue.length} queued, ${resumeState.processedCount} processed`);
+  } else {
+    visited.add(startUrlNormalized);
+  }
 
-  await db.resetData(userId);
+  const queue: { url: string; currentDepth: number }[] = resumeState?.queue?.length
+    ? resumeState.queue
+    : [{ url: startUrlNormalized, currentDepth: 0 }];
+
+  if (!resumeState) await db.resetData(userId);
   await db.updateStatus(userId, true, 0, startUrlNormalized);
 
   // Process sitemaps in parallel with crawl — start crawl immediately
@@ -396,6 +403,15 @@ export async function audit(startUrl: string, config: AuditConfig) {
     // ALWAYS increment and save result (success or failure) to avoid UI getting stuck
     processedCount++;
 
+    // Persist crawl state every 50 pages for resume support
+    if (processedCount % 50 === 0) {
+      db.saveCrawlState(userId, {
+        queue: queue.slice(0, 1000),
+        visited: Array.from(visited).slice(0, 5000),
+        processedCount
+      }).catch(() => {});
+    }
+
     if (htmlContent && htmlContent.length > 50) {
       const loadTime = Date.now() - startTime;
       const isRoot = currentDepth === 0;
@@ -519,5 +535,12 @@ export async function audit(startUrl: string, config: AuditConfig) {
     if (browser) await browser.close().catch(() => {});
     if (sharedContext) await sharedContext.close().catch(() => {});
     await db.updateStatus(userId, false, 100, "Completed");
+    await db.clearCrawlState(userId);
+    await db.markCached(userId, startUrl);
+    try {
+      const pages = await db.getPages(userId);
+      const stats = await db.getStats(userId);
+      await db.saveAuditHistory(userId, startUrl, stats, pages.length);
+    } catch (e) { console.error("Failed to save audit history:", e); }
   }
 }

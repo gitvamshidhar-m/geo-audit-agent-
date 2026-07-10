@@ -125,7 +125,7 @@ const getJitteredScore = (url: string, baseScore: number, index: number) => {
 
 export default function App() {
   console.log("App component rendering...");
-  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare'>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(1000);
@@ -144,6 +144,19 @@ export default function App() {
   const [auditStartTime, setAuditStartTime] = useState<number | null>(null);
   const [auditEndTime, setAuditEndTime] = useState<number | null>(null);
   const [auditElapsedTime, setAuditElapsedTime] = useState<number>(0);
+  const [comparisons, setComparisons] = useState<{ url: string; timestamp: string; stats: AuditStats; pagesCount: number }[]>([]);
+
+  const saveComparison = () => {
+    if (!stats || !url) return;
+    setComparisons(prev => {
+      const filtered = prev.filter(c => c.url !== url);
+      return [{ url, timestamp: new Date().toISOString(), stats, pagesCount: pages.length }, ...filtered].slice(0, 5);
+    });
+  };
+
+  const removeComparison = (targetUrl: string) => {
+    setComparisons(prev => prev.filter(c => c.url !== targetUrl));
+  };
 
   useEffect(() => {
     let timer: any;
@@ -226,6 +239,18 @@ export default function App() {
       console.warn("localStorage is not available in this environment.");
     }
   }, [apiKeys]);
+
+  // Load comparisons from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('seo_comparisons');
+      if (saved) setComparisons(JSON.parse(saved));
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem('seo_comparisons', JSON.stringify(comparisons)); } catch (e) { /* ignore */ }
+  }, [comparisons]);
 
   const filteredPages = useMemo(() => {
     return pages.filter(p => !pageSearch || p.url.toLowerCase().includes(pageSearch.toLowerCase()) || (pageSearch === 'critical' && p.issues.some(i => i.type === 'critical')));
@@ -381,7 +406,7 @@ export default function App() {
     }
   };
 
-  const startAudit = async () => {
+  const startAudit = async (force = false) => {
     let targetUrl = url.trim();
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       targetUrl = `https://${targetUrl}`;
@@ -396,11 +421,18 @@ export default function App() {
       const res = await apiFetch('/api/audit/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, depth, maxPages, quick })
+        body: JSON.stringify({ url: targetUrl, depth, maxPages, quick, force })
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || `Audit Start Error: ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.cached) {
+        // Cached audit — fetch existing results immediately
+        fetchResults().catch(err => console.error("Cached results fetch failed", err));
+        setIsAuditing(false);
+        setAuditEndTime(Date.now());
       }
     } catch (err: any) {
       console.error("Failed to start audit", err);
@@ -518,13 +550,45 @@ export default function App() {
     }
   };
 
-  const handleExport = () => {
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const handleExportJSON = () => {
+    setShowExportMenu(false);
     const data = { stats, pages, timestamp: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `seo-audit-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    setShowExportMenu(false);
+    if (!stats || pages.length === 0) return;
+    let csv = "URL,Title,Score,Word Count,Load Time (ms),Status Code,Description\n";
+    pages.forEach(p => {
+      const desc = (p.description || "").replace(/"/g, '""');
+      const title = (p.title || "").replace(/"/g, '""');
+      csv += `"${p.url}","${title}",${p.score || 0},${p.wordCount || 0},${p.loadTime || 0},${p.statusCode || 0},"${desc}"\n`;
+    });
+    csv += `\n--- Summary ---\n`;
+    csv += `Total Pages,${stats.totalPages}\n`;
+    csv += `Average Score,${stats.averageScore}\n`;
+    csv += `Critical Issues,${stats.criticalIssues}\n`;
+    csv += `Warning Issues,${stats.warningIssues}\n`;
+    csv += `SEO Visibility Score,${stats.seoVisibilityScore}\n`;
+    csv += `GEO Score,${stats.geoScore}\n`;
+    csv += `AI Recognition Score,${stats.aiRecognitionScore}\n`;
+    csv += `Structured Data Coverage,${stats.structuredDataCoverage}%\n`;
+    csv += `Social Graph Coverage,${stats.socialGraphCoverage}%\n`;
+    csv += `Broken Links,${stats.brokenLinksCount}\n`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `seo-audit-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -661,6 +725,20 @@ export default function App() {
               onClick={() => setActiveTab('market')} 
               icon={<Megaphone size={18} />} 
               label="Market Intelligence" 
+              collapsed={isSidebarCollapsed}
+            />
+            <SidebarLink 
+              active={activeTab === 'compare'} 
+              onClick={() => setActiveTab('compare')} 
+              icon={<BarChartIcon size={18} />} 
+              label="Compare" 
+              collapsed={isSidebarCollapsed}
+            />
+            <SidebarLink 
+              active={activeTab === 'promptfoo'} 
+              onClick={() => setActiveTab('promptfoo')} 
+              icon={<FlaskConical size={18} />} 
+              label="Prompt Studio" 
               collapsed={isSidebarCollapsed}
             />
             <SidebarLink 
@@ -829,6 +907,25 @@ export default function App() {
               <div className="w-px h-3 bg-slate-200" />
               <Settings size={14} className="text-slate-400 group-hover:rotate-90 transition-transform duration-500" />
             </button>
+            {stats && comparisons.length > 0 && (
+              <button
+                onClick={() => setActiveTab('compare')}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
+              >
+                <BarChartIcon size={12} />
+                Compare ({comparisons.length})
+              </button>
+            )}
+            {stats && (
+              <button
+                onClick={saveComparison}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100"
+                title="Save current audit for comparison"
+              >
+                <Layers size={12} />
+                Save
+              </button>
+            )}
             {isAuditing && (
               <div className="flex flex-col gap-1 w-48 md:w-64 mr-2 shrink-0">
                  <div className="flex justify-between items-center text-[9px] font-bold text-blue-600 uppercase tracking-wider">
@@ -843,9 +940,24 @@ export default function App() {
                  </div>
               </div>
             )}
-            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
-              <Download size={18} />
-            </button>
+            <div className="relative">
+              <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all" onClick={() => setShowExportMenu(!showExportMenu)}>
+                <Download size={18} />
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 w-40">
+                  <button className="w-full px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 text-left" onClick={handleExportJSON}>
+                    Export JSON
+                  </button>
+                  <button className="w-full px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 text-left" onClick={handleExportCSV}>
+                    Export CSV
+                  </button>
+                  <button className="w-full px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 text-left" onClick={() => { setShowExportMenu(false); handleDownloadPDF(); }}>
+                    Export PDF
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         {/* Content Area */}
@@ -1876,7 +1988,7 @@ export default function App() {
                     isGenerating={isGeneratingAI}
                     aiProvider={aiProvider}
                     onRetry={handleRetryAI}
-                    onExport={handleExport}
+                    onExport={handleExportJSON}
                     onDownloadPDF={handleDownloadPDF}
                     onShare={() => {}}
                     url={url}
@@ -1947,6 +2059,85 @@ export default function App() {
                     onRegenerateAI={handleRetryAI}
                     agentProgress={agentProgress}
                   />
+                </div>
+              </motion.div>
+            )}
+            {activeTab === 'compare' && (
+              <motion.div
+                key="compare"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="w-full"
+              >
+                <div className="max-w-7xl mx-auto space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Site Comparison</h2>
+                    </div>
+                    {comparisons.length > 0 && (
+                      <button onClick={() => { setComparisons([]); localStorage.removeItem('seo_comparisons'); }} className="text-xs font-bold text-red-500 hover:text-red-600 px-3 py-1.5 bg-red-50 rounded-lg hover:bg-red-100 transition-all">
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  {comparisons.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400">
+                      <BarChartIcon size={48} className="mx-auto mb-4 text-slate-200" />
+                      <p className="text-sm font-bold">No audits saved for comparison</p>
+                      <p className="text-xs text-slate-300 mt-1">Run an audit, then click "Save" in the header to add it here.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="text-left py-3 px-4 font-black text-slate-500 uppercase tracking-wider">Metric</th>
+                            {comparisons.map(c => (
+                              <th key={c.url} className="text-center py-3 px-4 font-black text-slate-700 uppercase tracking-wider">
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className="truncate max-w-[160px]">{c.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+                                  <button onClick={() => removeComparison(c.url)} className="text-red-400 hover:text-red-600">
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                                <span className="block text-[9px] text-slate-400 font-medium mt-0.5">{new Date(c.timestamp).toLocaleDateString()}</span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { label: 'Total Pages', key: 'totalPages' },
+                            { label: 'Average Score', key: 'averageScore' },
+                            { label: 'Critical Issues', key: 'criticalIssues' },
+                            { label: 'Warning Issues', key: 'warningIssues' },
+                            { label: 'SEO Visibility Score', key: 'seoVisibilityScore' },
+                            { label: 'GEO Score', key: 'geoScore' },
+                            { label: 'AI Recognition Score', key: 'aiRecognitionScore' },
+                            { label: 'Structured Data', key: 'structuredDataCoverage', suffix: '%' },
+                            { label: 'Social Coverage', key: 'socialGraphCoverage', suffix: '%' },
+                            { label: 'Broken Links', key: 'brokenLinksCount' },
+                            { label: 'Has Robots.txt', key: 'hasRobots', boolean: true },
+                            { label: 'Has Sitemap', key: 'hasSitemap', boolean: true },
+                          ].map(row => (
+                            <tr key={row.key} className="border-b border-slate-100 hover:bg-slate-50">
+                              <td className="py-2.5 px-4 font-bold text-slate-600">{row.label}</td>
+                              {comparisons.map(c => {
+                                const val = (c.stats as any)[row.key];
+                                let display: string;
+                                if (row.boolean) display = val ? '✅' : '❌';
+                                else display = val !== undefined && val !== null ? String(val) + (row.suffix || '') : '—';
+                                return <td key={c.url} className="text-center py-2.5 px-4 font-mono font-bold text-slate-800">{display}</td>;
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}

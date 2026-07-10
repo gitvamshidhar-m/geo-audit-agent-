@@ -60,7 +60,19 @@ export async function initDB() {
       current_url TEXT,
       last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
       has_robots BOOLEAN DEFAULT 0,
-      has_sitemap BOOLEAN DEFAULT 0
+      has_sitemap BOOLEAN DEFAULT 0,
+      cached_url TEXT DEFAULT NULL,
+      cached_at DATETIME DEFAULT NULL,
+      crawl_state TEXT DEFAULT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId TEXT,
+      url TEXT,
+      cached_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      stats TEXT,
+      pages_count INTEGER
     );
   `);
 
@@ -345,7 +357,45 @@ function calculateAiRecognitionScore(pages: SEOPage[]) {
   return Math.min(100, Math.round(avgGeo + visibilityBonus));
 }
 
+export async function saveCrawlState(userId: string, state: { queue: any[]; visited: string[]; processedCount: number }) {
+  db.prepare("UPDATE audit_status SET crawl_state = ? WHERE userId = ?").run(JSON.stringify(state), userId);
+}
+
+export async function getCrawlState(userId: string) {
+  const row = db.prepare("SELECT crawl_state FROM audit_status WHERE userId = ?").get(userId) as any;
+  if (row?.crawl_state) {
+    try { return JSON.parse(row.crawl_state); } catch { return null; }
+  }
+  return null;
+}
+
+export async function clearCrawlState(userId: string) {
+  db.prepare("UPDATE audit_status SET crawl_state = NULL WHERE userId = ?").run(userId);
+}
+
+export async function isCachedAudit(userId: string, url: string) {
+  const row = db.prepare("SELECT cached_url, cached_at FROM audit_status WHERE userId = ?").get(userId) as any;
+  if (row?.cached_url === url && row?.cached_at) {
+    const age = (Date.now() - new Date(row.cached_at + 'Z').getTime()) / 1000 / 60;
+    if (age < 60) return true;
+  }
+  return false;
+}
+
+export async function markCached(userId: string, url: string) {
+  db.prepare("UPDATE audit_status SET cached_url = ?, cached_at = CURRENT_TIMESTAMP WHERE userId = ?").run(url, userId);
+}
+
+export async function saveAuditHistory(userId: string, url: string, stats: any, pagesCount: number) {
+  db.prepare("INSERT INTO audit_history (userId, url, stats, pages_count) VALUES (?, ?, ?, ?)").run(userId, url, JSON.stringify(stats), pagesCount);
+}
+
+export async function getAuditHistory(userId: string) {
+  return db.prepare("SELECT * FROM audit_history WHERE userId = ? ORDER BY cached_at DESC LIMIT 10").all(userId);
+}
+
 export async function resetData(userId: string) {
   db.prepare("DELETE FROM pages WHERE userId = ?").run(userId);
   await updateStatus(userId, false, 0, "", false, false);
+  await clearCrawlState(userId);
 }

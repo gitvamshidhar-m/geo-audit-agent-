@@ -1,0 +1,36 @@
+name: Scheduled Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Site URL to audit'
+        required: true
+        default: 'https://example.com'
+      depth:
+        description: 'Crawl depth'
+        required: false
+        default: '3'
+      maxPages:
+        description: 'Max pages to crawl'
+        required: false
+        default: '100'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger GEO Audit
+        run: |
+          URL="${{ github.event.inputs.url || 'https://example.com' }}"
+          DEPTH="${{ github.event.inputs.depth || '3' }}"
+          MAX_PAGES="${{ github.event.inputs.maxPages || '100' }}"
+          echo "Starting scheduled audit for $URL (depth=$DEPTH, max=$MAX_PAGES)"
+          curl -s --max-time 900 -X POST "https://geo-audit-agent-mouk.onrender.com/api/audit/start" \
+            -H "Content-Type: application/json" \
+            -H "x-user-id: scheduled-bot" \
+            -d "{\"url\":\"$URL\",\"depth\":$DEPTH,\"maxPages\":$MAX_PAGES,\"quick\":true}"
+          echo ""
+          echo "Audit triggered. Check the app for results."
