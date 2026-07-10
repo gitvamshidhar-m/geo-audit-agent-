@@ -104,6 +104,37 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
     }
   }
 
+  // Image extraction for visual assets & accessibility
+  const images: { src: string; alt: string; isMissingAlt: boolean; altQuality: 'good' | 'generic' | 'missing' }[] = [];
+  let imgPos = 0;
+  while (imgPos < html.length && images.length < 50) {
+    const imgTag = lc.indexOf("<img", imgPos);
+    if (imgTag < 0) break;
+    const close = html.indexOf(">", imgTag);
+    if (close < 0 || close > imgTag + 1000) { imgPos = imgTag + 4; continue; }
+    const chunk = html.slice(imgTag, close + 1);
+    const src = (chunk.match(/src="([^"]*)"/i) || chunk.match(/src='([^']*)'/i))?.[1] || "";
+    const alt = (chunk.match(/alt="([^"]*)"/i) || chunk.match(/alt='([^']*)'/i))?.[1] || "";
+    const isMissingAlt = !/(?:^|\s)alt\s*=/i.test(chunk);
+    let altQuality: 'good' | 'generic' | 'missing' = 'good';
+    if (isMissingAlt) altQuality = 'missing';
+    else {
+      const genericTerms = ["image", "logo", "img", "picture", "photo", "background", "spacer", "icon", "placeholder"];
+      const lowerAlt = alt.toLowerCase().trim();
+      const isGeneric = genericTerms.some(t => lowerAlt === t || lowerAlt.includes(` ${t} `) || lowerAlt.startsWith(`${t} `) || lowerAlt.endsWith(` ${t}`));
+      if (isGeneric || /^[0-9a-zA-Z\-_]+\.(jpg|png|webp|gif|svg)$/i.test(alt) || alt.length < 3) altQuality = 'generic';
+    }
+    images.push({ src, alt, isMissingAlt, altQuality });
+    imgPos = close + 1;
+  }
+  const totalImages = images.length;
+  const missingAltCount = images.filter(i => i.altQuality === 'missing').length;
+  const genericAltCount = images.filter(i => i.altQuality === 'generic').length;
+  const missingAltPercent = totalImages > 0 ? Number(((missingAltCount / totalImages) * 100).toFixed(1)) : 0;
+  const imageMetrics = { total: totalImages, missingAlt: missingAltCount, missingAltPercent, genericAlt: genericAltCount };
+  if (missingAltCount > 0) issues.push({ type: "warning", message: `${missingAltCount} images missing alt text`, category: "on-page" });
+  if (genericAltCount > 0) issues.push({ type: "info", message: `${genericAltCount} images have generic/low-quality alt text`, category: "content" });
+
   // OG & Twitter Tags extraction
   const ogTags: Record<string, string> = {};
   let mtPos = 0;
@@ -160,12 +191,12 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
   return {
     url, title: titleText, description, wordCount,
     statusCode: headers?.["x-actual-status"] ? parseInt(headers["x-actual-status"], 10) : 200,
-    loadTime, headers: headers_element, images: [], links, canonical, robots: "", ogTags,
+    loadTime, headers: headers_element, images, links, canonical, robots: "", ogTags,
     structuredData, score, issues,
     performance,
     keywords, sentiment: 'neutral' as const, sentimentScore: 0, topics,
     keywordDensity, textToCodeRatio,
-    imageMetrics: { total: 0, missingAlt: 0, missingAltPercent: 0, genericAlt: 0 },
+    imageMetrics,
     geoScore: 50, bodyText
   };
 }
