@@ -1,6 +1,70 @@
 import * as cheerio from "cheerio";
 import { SEOPage, SEOIssue } from "../types/seo.js";
 
+export function quickAnalyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>): SEOPage {
+  const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").trim();
+  const description = (html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)?.[1] || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i)?.[1] || "");
+  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const h1Text = h1Match ? h1Match[1].replace(/<[^>]+>/g, "").trim() : "";
+  const canonical = (html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']*)["']/i)?.[1] || "");
+  const robots = (html.match(/<meta[^>]+name=["']robots["'][^>]+content=["']([^"']*)["']/i)?.[1] || "");
+  const viewport = (html.match(/<meta[^>]+name=["']viewport["'][^>]+content=["']([^"']*)["']/i)?.[1] || "");
+  const ogTags: Record<string, string> = {};
+  const ogRegex = /<meta[^>]+(?:property|name)=["']((?:og:|twitter:)[^"']*)["'][^>]+content=["']([^"']*)["']/gi;
+  let m;
+  while ((m = ogRegex.exec(html)) !== null) ogTags[m[1].toLowerCase()] = m[2];
+
+  const issues: SEOIssue[] = [];
+  if (!title) issues.push({ type: "critical", message: "Missing title tag", category: "on-page" });
+  else if (title.length > 60) issues.push({ type: "warning", message: "Title too long (>60 chars)", category: "on-page" });
+  if (!description) issues.push({ type: "critical", message: "Missing meta description", category: "on-page" });
+  if (!viewport) issues.push({ type: "critical", message: "Missing viewport meta tag (Mobile SEO)", category: "technical" });
+  if (!canonical) issues.push({ type: "warning", message: "Missing canonical tag", category: "technical" });
+  if (!ogTags['og:title']) issues.push({ type: "info", message: "Missing Social Graph metadata (OG/Twitter)", category: "on-page" });
+
+  const bodyText = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const wordCount = bodyText.split(/\s+/).filter(w => w.length > 0).length;
+  if (wordCount < 300) issues.push({ type: "warning", message: "Thin content (<300 words)", category: "content" });
+
+  const linkRegex = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
+  const links: { internal: string[]; external: string[] } = { internal: [], external: [] };
+  let domain = "unknown";
+  try { domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch {}
+  while ((m = linkRegex.exec(html)) !== null) {
+    const href = m[1];
+    try {
+      const host = new URL(href).hostname.replace(/^www\./, "").toLowerCase();
+      if (host === domain) { if (!links.internal.includes(href)) links.internal.push(href); }
+      else { if (!links.external.includes(href)) links.external.push(href); }
+    } catch {}
+  }
+
+  const hRegex = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
+  const headers_element: Record<string, string[]> = { h1: [], h2: [], h3: [], h4: [], h5: [], h6: [] };
+  while ((m = hRegex.exec(html)) !== null) {
+    const level = m[1];
+    const text = m[2].replace(/<[^>]+>/g, "").trim();
+    if (text && level >= "1" && level <= "6") headers_element[`h${level}`].push(text);
+  }
+
+  let score = 75;
+  score -= issues.filter(i => i.type === "critical").length * 18;
+  score -= issues.filter(i => i.type === "warning").length * 6.5;
+  score = Math.min(100, Math.max(5, Math.round(score)));
+
+  return {
+    url, title, description, wordCount,
+    statusCode: headers?.["x-actual-status"] ? parseInt(headers["x-actual-status"], 10) : 200,
+    loadTime, headers: headers_element, images: [], links, canonical, robots, ogTags,
+    structuredData: [], score, issues,
+    performance: { performanceScore: 75, fcp: 1.5, lcp: 2.0, cls: 0.05, tbt: 100 },
+    keywords: [], sentiment: 'neutral' as const, sentimentScore: 0, topics: [],
+    keywordDensity: [], textToCodeRatio: 0,
+    imageMetrics: { total: 0, missingAlt: 0, missingAltPercent: 0, genericAlt: 0 },
+    geoScore: 50, bodyText: ""
+  };
+}
+
 export function analyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>, lightweight?: boolean): SEOPage {
   const $ = cheerio.load(html);
   const issues: SEOIssue[] = [];

@@ -3,7 +3,7 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import fetch from "node-fetch";
 import { Agent as HttpAgent } from "http";
 import { Agent as HttpsAgent } from "https";
-import { analyzeHTML } from "./analyzer.js";
+import { analyzeHTML, quickAnalyzeHTML } from "./analyzer.js";
 
 import * as db from "./storage.js";
 chromium.use(StealthPlugin());
@@ -416,7 +416,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
     if (htmlContent && htmlContent.length > 50) {
       const loadTime = Date.now() - startTime;
       const isRoot = currentDepth === 0;
-      const pageData = analyzeHTML(finalUrl, htmlContent, loadTime, headersMap, !isRoot);
+      const pageData = isRoot ? analyzeHTML(finalUrl, htmlContent, loadTime, headersMap) : quickAnalyzeHTML(finalUrl, htmlContent, loadTime, headersMap);
 
       pageBuffer.push(pageData);
       if (!flushScheduled) {
