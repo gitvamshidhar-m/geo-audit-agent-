@@ -1,17 +1,5 @@
-const origStringify = JSON.stringify;
-
-JSON.stringify = function(this: any, ...args: any[]) {
-  const val = args[0];
-  if (val && typeof val === 'object' && val.constructor && val.constructor.name === 'HTMLSpanElement') {
-    const stack = new Error().stack;
-    console.error('[JSON.stringify DIAG] HTMLSpanElement in JSON.stringify. Stack:', stack);
-    try { fetch('/api/log', { method: 'POST', body: origStringify({ msg: 'HTMLSpanElement in JSON.stringify', stack }), headers: { 'Content-Type': 'application/json' } }); } catch {}
-  }
-  return origStringify.apply(this, args);
-};
-
 function safeStringify(val: any): string {
-  try { return origStringify(val); } catch { return String(val); }
+  try { return JSON.stringify(val); } catch { return String(val); }
 }
 
 window.addEventListener('error', (e) => {

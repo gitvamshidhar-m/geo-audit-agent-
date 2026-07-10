@@ -432,10 +432,19 @@ export default function App() {
     setAuditEndTime(null);
     setCurrentCrawlingUrl(targetUrl);
     try {
+      const bodyData = { url: targetUrl, depth, maxPages, quick, force };
+      for (const [k, v] of Object.entries(bodyData)) {
+        if (v && typeof v === 'object') console.error(`[DIAG] startAudit key "${k}" is an object:`, v.constructor?.name, v);
+      }
+      let bodyStr: string;
+      try { bodyStr = JSON.stringify(bodyData); } catch (e: any) {
+        console.error("[DIAG] JSON.stringify failed for bodyData. Keys:", Object.keys(bodyData).map(k => `${k}: ${typeof bodyData[k as keyof typeof bodyData]}`));
+        throw e;
+      }
       const res = await apiFetch('/api/audit/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, depth, maxPages, quick, force })
+        body: bodyStr
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -443,7 +452,6 @@ export default function App() {
       }
       const data = await res.json();
       if (data.cached) {
-        // Cached audit — fetch existing results immediately
         fetchResults().catch(err => console.error("Cached results fetch failed", err));
         setIsAuditing(false);
         setAuditEndTime(Date.now());
