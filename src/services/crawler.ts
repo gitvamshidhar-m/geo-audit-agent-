@@ -295,6 +295,24 @@ export async function audit(startUrl: string, config: AuditConfig) {
                     "Playwright failed to launch. Attempting automated recovery...",
                     launchErr.message,
                   );
+                  try {
+                    const { execSync } = await import("child_process");
+                    execSync("npx playwright install chromium", { stdio: "inherit", timeout: 120000 });
+                    browser = await chromium.launch({
+                      headless: true,
+                      args: [
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--single-process",
+                        "--disable-web-security",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-blink-features=AutomationControlled",
+                      ],
+                    });
+                  } catch (installErr: any) {
+                    console.error("Chromium install failed:", installErr.message);
+                  }
                 } finally {
                   isLaunchingBrowser = false;
                 }
