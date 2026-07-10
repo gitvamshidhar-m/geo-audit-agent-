@@ -32,7 +32,7 @@ async function startServer() {
       fs.appendFileSync("frontend_errors.log", JSON.stringify(req.body) + "\n");
       res.json({ ok: true });
     });
-    app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+    app.get("/api/health", (req, res) => res.json({ status: "ok", version: process.env.RENDER_GIT_COMMIT?.substring(0,7) || "dev" }));
   
   app.post("/api/ai/insights", async (req, res) => {
     const { provider, stats, pages, keys } = req.body;
