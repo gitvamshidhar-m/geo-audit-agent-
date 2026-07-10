@@ -100,6 +100,15 @@ export async function savePage(userId: string, page: SEOPage) {
     .run(userId, page.url, JSON.stringify(page), page.score);
 }
 
+export async function savePagesBatch(userId: string, pages: SEOPage[]) {
+  if (pages.length === 0) return;
+  const insert = db.prepare("INSERT OR REPLACE INTO pages (userId, url, data, score) VALUES (?, ?, ?, ?)");
+  const tx = db.transaction((batch: SEOPage[]) => {
+    for (const p of batch) insert.run(userId, p.url, JSON.stringify(p), p.score);
+  });
+  tx(pages);
+}
+
 export async function getPages(userId: string): Promise<SEOPage[]> {
   const rows = db.prepare("SELECT data FROM pages WHERE userId = ?").all(userId);
   return rows.map((r: any) => JSON.parse(r.data));

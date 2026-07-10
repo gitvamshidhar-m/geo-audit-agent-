@@ -80,7 +80,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
       const fetchSitemap = async (sUrl: string, d = 0): Promise<string[]> => {
         if (d > 2 || sitemapCount > (quick ? 1000 : 5000)) return [];
         const sc = new AbortController();
-        const st = setTimeout(() => sc.abort(), quick ? 3000 : 8000);
+        const st = setTimeout(() => sc.abort(), quick ? 2000 : 6000);
         const sr = await fetch(sUrl, {
           headers: { "User-Agent": userAgents[0], Accept: "application/xml,text/xml,*/*" },
           signal: sc.signal,
@@ -157,6 +157,13 @@ export async function audit(startUrl: string, config: AuditConfig) {
   let activePlaywrights = 0;
   let browser: any = null;
   let isLaunchingBrowser = false;
+  const pageBuffer: any[] = [];
+  let flushScheduled = false;
+  async function flushPages() {
+    if (pageBuffer.length === 0) return;
+    const batch = pageBuffer.splice(0);
+    try { await db.savePagesBatch(userId, batch); } catch (e) { console.error("Batch save failed:", e); }
+  }
 
   async function getPageData(url: string, currentDepth: number) {
     if (processedCount >= maxPages) return;
@@ -182,7 +189,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
       // Try fetch first (Fast) with connection reuse
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), quick ? 8000 : 12000);
+        const timeout = setTimeout(() => controller.abort(), quick ? 5000 : 12000);
 
         const response = await fetch(url, {
           headers: fetchHeaders,
@@ -335,7 +342,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
               try {
                 let resp = await page
-                  .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 8000 : 15000 })
+                  .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 5000 : 15000 })
                   .catch((err) => {
                     lastErrorMessage = err.message || "Playwright goto failed";
                     return null;
@@ -408,9 +415,15 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
     if (htmlContent && htmlContent.length > 50) {
       const loadTime = Date.now() - startTime;
-      const pageData = analyzeHTML(finalUrl, htmlContent, loadTime, headersMap);
+      const isRoot = currentDepth === 0;
+      const pageData = analyzeHTML(finalUrl, htmlContent, loadTime, headersMap, !isRoot);
 
-      await db.savePage(userId, pageData);
+      pageBuffer.push(pageData);
+      if (!flushScheduled) {
+        flushScheduled = true;
+        setTimeout(() => { flushScheduled = false; flushPages(); }, 200);
+      }
+      if (pageBuffer.length >= 20) await flushPages();
 
       if (currentDepth < depth && processedCount < maxPages) {
         const queueBudget = maxPages * 5 - processedCount;
@@ -523,6 +536,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
   } catch (error) {
     console.error("Audit error:", error);
   } finally {
+    await flushPages();
     if (browser) await browser.close().catch(() => {});
     if (sharedContext) await sharedContext.close().catch(() => {});
     await db.updateStatus(userId, false, 100, "Completed");

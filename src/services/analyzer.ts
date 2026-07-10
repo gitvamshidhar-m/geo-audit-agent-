@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { SEOPage, SEOIssue } from "../types/seo.js";
 
-export function analyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>): SEOPage {
+export function analyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>, lightweight?: boolean): SEOPage {
   const $ = cheerio.load(html);
   const issues: SEOIssue[] = [];
 
@@ -177,39 +177,35 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
     } catch (e) { /* Invalid */ }
   });
 
-  // Secondary Deep Link Extraction (Regex) 
-  const urlRegex = /"(https?:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}[a-zA-Z0-9\-\.\/\?\%\&\=\_\#]*)"/g;
-  let match;
-  while ((match = urlRegex.exec(html)) !== null) {
-    const foundUrl = match[1];
-    try {
-      const u = new URL(foundUrl);
-      const h = u.hostname.replace(/^www\./, '').toLowerCase();
-      const b = domain.replace(/^www\./, '').toLowerCase();
-      const abs = u.href.replace(/\/$/, '');
-      if (/\.(png|jpg|jpeg|gif|svg|css|js|woff|woff2|ttf|pdf)$/i.test(abs.split('?')[0])) continue;
-
-      if (h === b || h.endsWith('.' + b)) {
-        if (!links.internal.includes(abs)) links.internal.push(abs);
-      } else {
-         if (!links.external.includes(abs)) links.external.push(abs);
-      }
-    } catch(e) {}
+  if (!lightweight) {
+    const urlRegex = /"(https?:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}[a-zA-Z0-9\-\.\/\?\%\&\=\_\#]*)"/g;
+    let match;
+    while ((match = urlRegex.exec(html)) !== null) {
+      const foundUrl = match[1];
+      try {
+        const u = new URL(foundUrl);
+        const h = u.hostname.replace(/^www\./, '').toLowerCase();
+        const b = domain.replace(/^www\./, '').toLowerCase();
+        const abs = u.href.replace(/\/$/, '');
+        if (/\.(png|jpg|jpeg|gif|svg|css|js|woff|woff2|ttf|pdf)$/i.test(abs.split('?')[0])) continue;
+        if (h === b || h.endsWith('.' + b)) {
+          if (!links.internal.includes(abs)) links.internal.push(abs);
+        } else {
+           if (!links.external.includes(abs)) links.external.push(abs);
+        }
+      } catch(e) {}
+    }
   }
 
   if (genericAnchorCount > 3) issues.push({ type: "info", message: `${genericAnchorCount} generic anchor text links found (e.g. "click here")`, category: "on-page" });
-  if (socialLinksFound.length === 0) issues.push({ type: "info", message: "No official social media profiles linked", category: "content" });
+  if (!lightweight && socialLinksFound.length === 0) issues.push({ type: "info", message: "No official social media profiles linked", category: "content" });
 
   // Word count & Content Extraction
   // ... (rest of word count logic)
   const cleanBody = $("body").clone();
-  // Remove technical noise that doesn't count as "text content"
   cleanBody.find("script, style, noscript, svg, path, iframe, canvas, video, audio").remove();
-  
-  const rawText = cleanBody.text(); // Includes all whitespace from text nodes
-  const bodyText = rawText.replace(/\s+/g, " ").trim(); // Normalized for word count
-  
-  // Improved word count (handles special characters better)
+  const rawText = cleanBody.text();
+  const bodyText = rawText.replace(/\s+/g, " ").trim();
   const wordCount = bodyText.split(/\s+/).filter(w => w.length > 0).length;
   if (wordCount < 300) issues.push({ type: "warning", message: "Thin content (<300 words)", category: "content" });
 
@@ -397,43 +393,40 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
   if (performance.performanceScore < 75) issues.push({ type: "warning", message: "Sub-optimal mobile performance score", category: "technical" });
   if (performance.lcp > 2.5) issues.push({ type: "warning", message: `Core Web Vital Alert: LCP is ${performance.lcp}s`, category: "technical" });
 
-  // Enhanced Keyword Extraction
-  const stopwords = new Set(["a", "an", "the", "and", "or", "but", "if", "then", "of", "to", "in", "is", "it", "that", "this", "was", "for", "with", "as", "at", "by", "from", "up", "on", "out", "about", "into", "over", "after", "your", "more", "their", "have", "been", "these", "thier", "will", "can", "are", "were", "been", "has", "had", "should", "could", "would"]);
-  
-  const extractKeywordsDetailed = (text: string, totalWords: number) => {
-    // 1. Process text: split by non-words and spaces
-    const words = text
-      .split(/[^a-zA-Z0-9]+/)
-      .filter(w => {
-        const lower = w.toLowerCase();
-        // 2. Filters
-        if (w.length < 3) return false;                 // Too short
-        if (stopwords.has(lower)) return false;         // Stop word
-        if (/^\d+$/.test(w)) return false;             // Just numbers
-        if (/[A-Z]{3,}/.test(w)) return false;          // SUSPECT: Pure acronyms or CSS classes (e.g. NORMAL)
-        if (/[a-z]+[A-Z]+/.test(w)) return false;       // SUSPECT: camelCase or PascalCase (e.g. GalleryItem)
-        if (w.length > 15) return false;                // SUSPECT: Long technical identifiers
-        return true;
-      })
-      .map(w => w.toLowerCase());
-    
-    const freqs: Record<string, number> = {};
-    words.forEach(w => freqs[w] = (freqs[w] || 0) + 1);
-    
-    return Object.entries(freqs)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([w, count]) => ({
-        word: w.toUpperCase(),
-        count,
-        density: totalWords > 0 ? Number(((count / totalWords) * 100).toFixed(2)) : 0
-      }));
-  };
+  let keywords: string[] = [];
+  let keywordDensity: any[] = [];
+  let sentiment: 'positive' | 'neutral' | 'negative' = 'neutral';
+  let sentimentScore = 0;
+  let topics: string[] = [];
+  let geoScore = 50;
 
-  const keywordDensity = extractKeywordsDetailed(bodyText + " " + title + " " + (pageElements.h1.join(" ")), wordCount);
-  const keywords = keywordDensity.map(k => k.word).slice(0, 8);
-  const { sentiment, score: sentimentScore } = analyzeSentiment(bodyText);
-  const topics = extractTopics(bodyText, keywords);
+  if (!lightweight) {
+    const stopwords = new Set(["a", "an", "the", "and", "or", "but", "if", "then", "of", "to", "in", "is", "it", "that", "this", "was", "for", "with", "as", "at", "by", "from", "up", "on", "out", "about", "into", "over", "after", "your", "more", "their", "have", "been", "these", "thier", "will", "can", "are", "were", "been", "has", "had", "should", "could", "would"]);
+    const extractKeywordsDetailed = (text: string, totalWords: number) => {
+      const words = text.split(/[^a-zA-Z0-9]+/).filter(w => {
+        const lower = w.toLowerCase();
+        if (w.length < 3) return false;
+        if (stopwords.has(lower)) return false;
+        if (/^\d+$/.test(w)) return false;
+        if (/[A-Z]{3,}/.test(w)) return false;
+        if (/[a-z]+[A-Z]+/.test(w)) return false;
+        if (w.length > 15) return false;
+        return true;
+      }).map(w => w.toLowerCase());
+      const freqs: Record<string, number> = {};
+      words.forEach(w => freqs[w] = (freqs[w] || 0) + 1);
+      return Object.entries(freqs).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([w, count]) => ({
+        word: w.toUpperCase(), count, density: totalWords > 0 ? Number(((count / totalWords) * 100).toFixed(2)) : 0
+      }));
+    };
+    keywordDensity = extractKeywordsDetailed(bodyText + " " + title + " " + (pageElements.h1.join(" ")), wordCount);
+    keywords = keywordDensity.map(k => k.word).slice(0, 8);
+    const sentResult = analyzeSentiment(bodyText);
+    sentiment = sentResult.sentiment;
+    sentimentScore = sentResult.score;
+    topics = extractTopics(bodyText, keywords);
+    geoScore = calculateGeoScore(pageElements, wordCount, structuredData.length > 0);
+  }
 
     return {
       url,
@@ -459,8 +452,8 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
       keywordDensity,
       textToCodeRatio,
       imageMetrics,
-      geoScore: calculateGeoScore(pageElements, wordCount, structuredData.length > 0),
-      bodyText
+      geoScore,
+      bodyText: lightweight ? "" : bodyText
     };
 }
 
