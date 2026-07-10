@@ -1,8 +1,0 @@
-{
-  "name": "GEO Audit Agent",
-  "description": "Ensure your web pages are fully optimized for the future of search with the GEO Audit Agent. Use for frequent, fast GEO checks to get an understanding of your AI search readiness, from crawler accessibility to content structure, and receive a prioritized action plan to boost your visibility.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
