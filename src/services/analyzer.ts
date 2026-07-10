@@ -2,49 +2,62 @@ import * as cheerio from "cheerio";
 import { SEOPage, SEOIssue } from "../types/seo.js";
 
 export function quickAnalyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>): SEOPage {
-  const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").trim();
-  const description = (html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)?.[1] || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i)?.[1] || "");
+  const title = html.slice(html.indexOf("<title"), html.indexOf("</title>") + 8);
+  const titleText = title ? title.replace(/<[^>]+>/g, "").trim() : "";
+  const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)/i);
+  const description = descMatch?.[1] || "";
   const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  const h1Text = h1Match ? h1Match[1].replace(/<[^>]+>/g, "").trim() : "";
-  const canonical = (html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']*)["']/i)?.[1] || "");
-  const robots = (html.match(/<meta[^>]+name=["']robots["'][^>]+content=["']([^"']*)["']/i)?.[1] || "");
-  const viewport = (html.match(/<meta[^>]+name=["']viewport["'][^>]+content=["']([^"']*)["']/i)?.[1] || "");
-  const ogTags: Record<string, string> = {};
-  const ogRegex = /<meta[^>]+(?:property|name)=["']((?:og:|twitter:)[^"']*)["'][^>]+content=["']([^"']*)["']/gi;
-  let m;
-  while ((m = ogRegex.exec(html)) !== null) ogTags[m[1].toLowerCase()] = m[2];
+  const canonical = (html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']*)/i)?.[1] || "");
+  const viewport = (html.match(/<meta[^>]+name=["']viewport["'][^>]+content=["']([^"']*)/i)?.[1] || "");
 
   const issues: SEOIssue[] = [];
-  if (!title) issues.push({ type: "critical", message: "Missing title tag", category: "on-page" });
-  else if (title.length > 60) issues.push({ type: "warning", message: "Title too long (>60 chars)", category: "on-page" });
+  if (!titleText) issues.push({ type: "critical", message: "Missing title tag", category: "on-page" });
+  else if (titleText.length > 60) issues.push({ type: "warning", message: "Title too long (>60 chars)", category: "on-page" });
   if (!description) issues.push({ type: "critical", message: "Missing meta description", category: "on-page" });
   if (!viewport) issues.push({ type: "critical", message: "Missing viewport meta tag (Mobile SEO)", category: "technical" });
   if (!canonical) issues.push({ type: "warning", message: "Missing canonical tag", category: "technical" });
-  if (!ogTags['og:title']) issues.push({ type: "info", message: "Missing Social Graph metadata (OG/Twitter)", category: "on-page" });
 
-  const bodyText = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  const wordCount = bodyText.split(/\s+/).filter(w => w.length > 0).length;
-  if (wordCount < 300) issues.push({ type: "warning", message: "Thin content (<300 words)", category: "content" });
-
-  const linkRegex = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
   const links: { internal: string[]; external: string[] } = { internal: [], external: [] };
-  let domain = "unknown";
-  try { domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch {}
-  while ((m = linkRegex.exec(html)) !== null) {
-    const href = m[1];
-    try {
-      const host = new URL(href).hostname.replace(/^www\./, "").toLowerCase();
-      if (host === domain) { if (!links.internal.includes(href)) links.internal.push(href); }
-      else { if (!links.external.includes(href)) links.external.push(href); }
-    } catch {}
+  let domain: string;
+  try { domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch { domain = ""; }
+  let pos = 0;
+  let linkCount = 0;
+  while (linkCount < 100) {
+    const aStart = html.indexOf('<a ', pos);
+    if (aStart < 0) break;
+    const hrefStart = html.indexOf('href="', aStart);
+    const hrefEnd = hrefStart > 0 ? html.indexOf('"', hrefStart + 6) : -1;
+    if (hrefStart > 0 && hrefEnd > hrefStart + 6) {
+      const absMatch = html.slice(hrefStart + 6, hrefEnd);
+      if (absMatch.startsWith("http")) {
+        linkCount++;
+        try {
+          const host = new URL(absMatch).hostname.replace(/^www\./, "").toLowerCase();
+          if (host === domain) { if (!links.internal.includes(absMatch)) links.internal.push(absMatch); }
+          else { if (!links.external.includes(absMatch)) links.external.push(absMatch); }
+        } catch {}
+      }
+    }
+    pos = hrefStart > 0 ? hrefEnd + 1 : aStart + 3;
   }
 
-  const hRegex = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
   const headers_element: Record<string, string[]> = { h1: [], h2: [], h3: [], h4: [], h5: [], h6: [] };
-  while ((m = hRegex.exec(html)) !== null) {
-    const level = m[1];
-    const text = m[2].replace(/<[^>]+>/g, "").trim();
-    if (text && level >= "1" && level <= "6") headers_element[`h${level}`].push(text);
+  pos = 0;
+  let hCount = 0;
+  while (hCount < 50) {
+    const hTag = html.indexOf('<h', pos);
+    if (hTag < 0) break;
+    const level = html[hTag + 2];
+    if (level >= "1" && level <= "6") {
+      const close = html.indexOf(">", hTag);
+      const end = html.indexOf(`</h${level}>`, close);
+      if (close > 0 && end > close) {
+        const text = html.slice(close + 1, end).replace(/<[^>]+>/g, "").trim();
+        if (text) headers_element[`h${level}`].push(text);
+        hCount++;
+      }
+    }
+    pos = hTag + 3;
   }
 
   let score = 75;
@@ -53,9 +66,9 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
   score = Math.min(100, Math.max(5, Math.round(score)));
 
   return {
-    url, title, description, wordCount,
+    url, title: titleText, description, wordCount: 0,
     statusCode: headers?.["x-actual-status"] ? parseInt(headers["x-actual-status"], 10) : 200,
-    loadTime, headers: headers_element, images: [], links, canonical, robots, ogTags,
+    loadTime, headers: headers_element, images: [], links, canonical, robots: "", ogTags: {},
     structuredData: [], score, issues,
     performance: { performanceScore: 75, fcp: 1.5, lcp: 2.0, cls: 0.05, tbt: 100 },
     keywords: [], sentiment: 'neutral' as const, sentimentScore: 0, topics: [],
