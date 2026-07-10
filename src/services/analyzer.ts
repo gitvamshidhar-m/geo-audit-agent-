@@ -77,21 +77,48 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
     pos = hTag + 3;
   }
 
+  // Lightweight body text extraction for stats
+  const bodyStart = lc.indexOf("<body");
+  const bodyEnd = lc.indexOf("</body>");
+  let bodyText = "";
+  let wordCount = 0;
+  let keywords: string[] = [];
+  let topics: string[] = [];
+  let keywordDensity: { word: string; count: number; density: number }[] = [];
+  let textToCodeRatio = 0;
+  if (bodyStart >= 0 && bodyEnd > bodyStart) {
+    const rawBody = html.slice(bodyStart, bodyEnd + 7).replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    bodyText = rawBody;
+    wordCount = rawBody ? rawBody.split(/\s+/).length : 0;
+    textToCodeRatio = html.length > 0 ? Number(((rawBody.length / html.length) * 100).toFixed(2)) : 0;
+    if (wordCount > 10) {
+      const stopwords = new Set(["a","an","the","and","or","but","if","then","of","to","in","is","it","that","this","was","for","with","as","at","by","from","up","on","out","about","into","over","after","your","more","their","have","been","these","will","can","are","were","has","had","should","could","would","not","no","be","do","all","its","so","just","also","very","than","them","they","what","when","who","how","which","each","some","there"]);
+      const words = rawBody.toLowerCase().split(/[^a-zA-Z0-9]+/).filter(w => w.length >= 3 && !stopwords.has(w) && !/^\d+$/.test(w) && w.length <= 15);
+      const freqs: Record<string, number> = {};
+      words.forEach(w => freqs[w] = (freqs[w] || 0) + 1);
+      const sorted = Object.entries(freqs).sort((a, b) => b[1] - a[1]);
+      keywordDensity = sorted.slice(0, 10).map(([w, c]) => ({ word: w.toUpperCase(), count: c, density: wordCount > 0 ? Number(((c / wordCount) * 100).toFixed(2)) : 0 }));
+      keywords = keywordDensity.map(k => k.word);
+      const topicKeywords = sorted.filter(([_, c]) => c > 1).slice(0, 3);
+      topics = topicKeywords.length > 0 ? topicKeywords.map(([w]) => w.toUpperCase()) : keywordDensity.slice(0, 2).map(k => k.word);
+    }
+  }
+
   let score = 75;
   score -= issues.filter(i => i.type === "critical").length * 18;
   score -= issues.filter(i => i.type === "warning").length * 6.5;
   score = Math.min(100, Math.max(5, Math.round(score)));
 
   return {
-    url, title: titleText, description, wordCount: 0,
+    url, title: titleText, description, wordCount,
     statusCode: headers?.["x-actual-status"] ? parseInt(headers["x-actual-status"], 10) : 200,
     loadTime, headers: headers_element, images: [], links, canonical, robots: "", ogTags: {},
     structuredData: [], score, issues,
     performance: { performanceScore: 75, fcp: 1.5, lcp: 2.0, cls: 0.05, tbt: 100 },
-    keywords: [], sentiment: 'neutral' as const, sentimentScore: 0, topics: [],
-    keywordDensity: [], textToCodeRatio: 0,
+    keywords, sentiment: 'neutral' as const, sentimentScore: 0, topics,
+    keywordDensity, textToCodeRatio,
     imageMetrics: { total: 0, missingAlt: 0, missingAltPercent: 0, genericAlt: 0 },
-    geoScore: 50, bodyText: ""
+    geoScore: 50, bodyText
   };
 }
 
