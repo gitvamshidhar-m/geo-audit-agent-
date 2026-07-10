@@ -1,5 +1,27 @@
+const origStringify = JSON.stringify;
+let stringifyDepth = 0;
+
+JSON.stringify = function(this: any, ...args: any[]) {
+  if (stringifyDepth > 10) return origStringify.apply(this, args);
+  stringifyDepth++;
+  try {
+    const val = args[0];
+    if (val && typeof val === 'object' && val.constructor && val.constructor.name === 'HTMLSpanElement') {
+      Error.captureStackTrace?.(val);
+      console.error('[JSON.stringify DIAG] HTMLSpanElement detected:', val.stack || new Error().stack);
+      fetch('/api/log', { method: 'POST', body: origStringify({ msg: 'HTMLSpanElement in JSON.stringify', stack: val.stack || new Error().stack }), headers: { 'Content-Type': 'application/json' } }).catch(() => {});
+    }
+    return origStringify.apply(this, args);
+  } catch(e) {
+    console.error('[JSON.stringify DIAG] Error:', e);
+    return '"<error>"';
+  } finally {
+    stringifyDepth--;
+  }
+};
+
 function safeStringify(val: any): string {
-  try { return JSON.stringify(val); } catch { return String(val); }
+  try { return origStringify(val); } catch { return String(val); }
 }
 
 window.addEventListener('error', (e) => {
