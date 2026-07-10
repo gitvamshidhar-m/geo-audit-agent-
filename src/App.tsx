@@ -1133,13 +1133,13 @@ export default function App() {
                               </div>
                            </div>
                            <div className="space-y-2">
-                              <div className="flex justify-between items-end">
-                                 <span className="text-[10px] font-black text-slate-500 uppercase">Latency Score</span>
-                                 <span className="text-sm font-black text-slate-900">{stats.loadTimeDistribution ? ((stats.loadTimeDistribution.fast / stats.totalPages) * 100).toFixed(0) : 0}%</span>
-                              </div>
-                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                 <div className="h-full bg-emerald-500" style={{ width: `${stats.loadTimeDistribution ? (stats.loadTimeDistribution.fast / stats.totalPages) * 100 : 0}%` }} />
-                              </div>
+                               <div className="flex justify-between items-end">
+                                  <span className="text-[10px] font-black text-slate-500 uppercase">Latency Score</span>
+                                  <span className="text-sm font-black text-slate-900">{stats.latencyScore != null ? stats.latencyScore : 0}</span>
+                               </div>
+                               <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-emerald-500" style={{ width: `${stats.latencyScore != null ? stats.latencyScore : 0}%` }} />
+                               </div>
                            </div>
                         </div>
                       </div>

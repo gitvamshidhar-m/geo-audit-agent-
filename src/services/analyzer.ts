@@ -581,13 +581,14 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
   score = Math.min(100, Math.max(5, score));
   const finalScore = Math.round(score);
 
-  // Performance Simulation (PageSpeed Insights)
+  // Performance based on actual loadTime
+  const pScore = loadTime < 500 ? 95 : loadTime < 1000 ? 85 : loadTime < 2000 ? 70 : loadTime < 4000 ? 50 : 30;
   const performance = {
-    performanceScore: Math.floor(Math.random() * 30) + 65, // 65-95
-    fcp: Number((Math.random() * 1.5 + 0.8).toFixed(1)), 
-    lcp: Number((Math.random() * 2.5 + 1.5).toFixed(1)), 
-    cls: Number((Math.random() * 0.05).toFixed(3)), 
-    tbt: Math.floor(Math.random() * 200) 
+    performanceScore: pScore,
+    fcp: Number((loadTime * 0.3).toFixed(1)),
+    lcp: Number((loadTime * 0.6).toFixed(1)),
+    cls: Number((Math.random() * 0.08).toFixed(3)),
+    tbt: Math.floor(pScore > 80 ? 50 : pScore > 60 ? 150 : 300),
   };
 
   if (performance.performanceScore < 75) issues.push({ type: "warning", message: "Sub-optimal mobile performance score", category: "technical" });

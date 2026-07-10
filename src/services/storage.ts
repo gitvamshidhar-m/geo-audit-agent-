@@ -311,6 +311,7 @@ export async function getStats(userId: string) {
     sentimentTrend: calculateSentimentTrend(pages),
     topicalClusters: calculateTopicalClusters(pages),
     aiRecognitionScore: calculateAiRecognitionScore(pages),
+    latencyScore: pages.length > 0 ? Math.round(pages.reduce((acc, p) => acc + (p.performance?.performanceScore || 75), 0) / pages.length) : 0,
   };
 }
 
