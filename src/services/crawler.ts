@@ -8,8 +8,8 @@ import { analyzeHTML, quickAnalyzeHTML } from "./analyzer.js";
 import * as db from "./storage.js";
 chromium.use(StealthPlugin());
 
-const keepAliveAgent = new HttpsAgent({ keepAlive: true, maxSockets: 6, timeout: 15000 });
-const keepAliveAgentHttp = new HttpAgent({ keepAlive: true, maxSockets: 6, timeout: 15000 });
+const keepAliveAgent = new HttpsAgent({ keepAlive: true, maxSockets: 50, timeout: 15000 });
+const keepAliveAgentHttp = new HttpAgent({ keepAlive: true, maxSockets: 50, timeout: 15000 });
 
 const userAgents = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -526,7 +526,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
   };
 
   try {
-    const workerCount = quick ? 8 : (process.env.RENDER || process.env.NODE_ENV === 'production' ? 6 : 10);
+    const workerCount = quick ? 50 : (process.env.RENDER || process.env.NODE_ENV === 'production' ? 15 : 30);
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.all(workers);
   } catch (error) {

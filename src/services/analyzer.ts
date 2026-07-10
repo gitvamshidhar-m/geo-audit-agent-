@@ -2,13 +2,19 @@ import * as cheerio from "cheerio";
 import { SEOPage, SEOIssue } from "../types/seo.js";
 
 export function quickAnalyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>): SEOPage {
-  const title = html.slice(html.indexOf("<title"), html.indexOf("</title>") + 8);
-  const titleText = title ? title.replace(/<[^>]+>/g, "").trim() : "";
-  const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)/i);
-  const description = descMatch?.[1] || "";
-  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  const canonical = (html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']*)/i)?.[1] || "");
-  const viewport = (html.match(/<meta[^>]+name=["']viewport["'][^>]+content=["']([^"']*)/i)?.[1] || "");
+  const lc = html.toLowerCase();
+  const titleIdx = lc.indexOf("<title");
+  const titleEndIdx = lc.indexOf("</title>");
+  const titleText = titleIdx >= 0 && titleEndIdx > titleIdx
+    ? html.slice(titleIdx, titleEndIdx + 8).replace(/<[^>]+>/g, "").trim()
+    : "";
+
+  const descMatch = html.match(/<meta[^>]+name=(?:"description"|'description')[^>]+content=(?:"([^"]*)"|'([^']*)')/i);
+  const description = descMatch?.[1] || descMatch?.[2] || "";
+  const canonicalMatch = html.match(/<link[^>]+rel=(?:"canonical"|'canonical')[^>]+href=(?:"([^"]*)"|'([^']*)')/i);
+  const canonical = canonicalMatch?.[1] || canonicalMatch?.[2] || "";
+  const viewportMatch = html.match(/<meta[^>]+name=(?:"viewport"|'viewport')[^>]+content=(?:"([^"]*)"|'([^']*)')/i);
+  const viewport = viewportMatch?.[1] || viewportMatch?.[2] || "";
 
   const issues: SEOIssue[] = [];
   if (!titleText) issues.push({ type: "critical", message: "Missing title tag", category: "on-page" });
@@ -17,40 +23,51 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
   if (!viewport) issues.push({ type: "critical", message: "Missing viewport meta tag (Mobile SEO)", category: "technical" });
   if (!canonical) issues.push({ type: "warning", message: "Missing canonical tag", category: "technical" });
 
-  const links: { internal: string[]; external: string[] } = { internal: [], external: [] };
   let domain: string;
   try { domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch { domain = ""; }
+
+  const links: { internal: string[]; external: string[] } = { internal: [], external: [] };
+  const linkSet = new Set<string>();
   let pos = 0;
   let linkCount = 0;
   while (linkCount < 100) {
-    const aStart = html.indexOf('<a ', pos);
+    const aStart = lc.indexOf("<a ", pos);
     if (aStart < 0) break;
-    const hrefStart = html.indexOf('href="', aStart);
-    const hrefEnd = hrefStart > 0 ? html.indexOf('"', hrefStart + 6) : -1;
-    if (hrefStart > 0 && hrefEnd > hrefStart + 6) {
-      const absMatch = html.slice(hrefStart + 6, hrefEnd);
-      if (absMatch.startsWith("http")) {
-        linkCount++;
+    let hrefPos = html.indexOf('href="', aStart);
+    let quote = '"';
+    if (hrefPos < 0 || hrefPos > aStart + 200) {
+      hrefPos = html.indexOf("href='", aStart);
+      quote = "'";
+    }
+    if (hrefPos >= 0 && hrefPos <= aStart + 200) {
+      const hrefEnd = html.indexOf(quote, hrefPos + 6);
+      if (hrefEnd > hrefPos + 6) {
+        const raw = html.slice(hrefPos + 6, hrefEnd);
         try {
-          const host = new URL(absMatch).hostname.replace(/^www\./, "").toLowerCase();
-          if (host === domain) { if (!links.internal.includes(absMatch)) links.internal.push(absMatch); }
-          else { if (!links.external.includes(absMatch)) links.external.push(absMatch); }
+          const abs = raw.startsWith("http") ? raw : new URL(raw, url).href;
+          const host = new URL(abs).hostname.replace(/^www\./, "").toLowerCase();
+          if (!linkSet.has(abs)) {
+            linkSet.add(abs);
+            linkCount++;
+            if (host === domain) links.internal.push(abs);
+            else links.external.push(abs);
+          }
         } catch {}
       }
     }
-    pos = hrefStart > 0 ? hrefEnd + 1 : aStart + 3;
+    pos = aStart + 3;
   }
 
   const headers_element: Record<string, string[]> = { h1: [], h2: [], h3: [], h4: [], h5: [], h6: [] };
   pos = 0;
   let hCount = 0;
   while (hCount < 50) {
-    const hTag = html.indexOf('<h', pos);
+    const hTag = lc.indexOf("<h", pos);
     if (hTag < 0) break;
     const level = html[hTag + 2];
     if (level >= "1" && level <= "6") {
       const close = html.indexOf(">", hTag);
-      const end = html.indexOf(`</h${level}>`, close);
+      const end = lc.indexOf(`</h${level}>`, close);
       if (close > 0 && end > close) {
         const text = html.slice(close + 1, end).replace(/<[^>]+>/g, "").trim();
         if (text) headers_element[`h${level}`].push(text);
