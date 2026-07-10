@@ -766,13 +766,6 @@ export default function App() {
               label="Prompt Studio" 
               collapsed={isSidebarCollapsed}
             />
-            <SidebarLink 
-              active={activeTab === 'promptfoo'} 
-              onClick={() => setActiveTab('promptfoo')} 
-              icon={<Terminal size={18} />} 
-              label="Promptfoo Studio" 
-              collapsed={isSidebarCollapsed}
-            />
           </nav>
         </div>
 
