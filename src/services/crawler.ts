@@ -1,18 +1,35 @@
 import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import fetch from "node-fetch";
-import pLimit from "p-limit";
+import { Agent as HttpAgent } from "http";
+import { Agent as HttpsAgent } from "https";
 import { analyzeHTML } from "./analyzer.js";
 
 import * as db from "./storage.js";
-// Use stealth plugin for Playwright
 chromium.use(StealthPlugin());
+
+const keepAliveAgent = new HttpsAgent({ keepAlive: true, maxSockets: 50, timeout: 15000 });
+const keepAliveAgentHttp = new HttpAgent({ keepAlive: true, maxSockets: 50, timeout: 15000 });
 
 const userAgents = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
 ];
+
+const fetchHeaders = {
+  "User-Agent": userAgents[0],
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+};
 
 interface AuditConfig {
   depth: number;
@@ -43,124 +60,96 @@ export async function audit(startUrl: string, config: AuditConfig) {
   await db.resetData(userId);
   await db.updateStatus(userId, true, 0, startUrlNormalized);
 
-  // Check robots.txt and sitemap
+  // Process sitemaps in parallel with crawl — start crawl immediately
   let hasRobots = false;
   let hasSitemap = false;
-  let sitemapUrls: string[] = [];
-  try {
-    const baseUrl = new URL(startUrlNormalized).origin;
+  const sitemapPromise = (async () => {
+    try {
+      const baseUrl = new URL(startUrlNormalized).origin;
+      const robotsCtrl = new AbortController();
+      const robotsTimer = setTimeout(() => robotsCtrl.abort(), quick ? 2000 : 5000);
+      const robotsRes = await fetch(`${baseUrl}/robots.txt`, {
+        headers: { "User-Agent": userAgents[0], Accept: "text/plain,text/html,*/*" },
+        signal: robotsCtrl.signal,
+        agent: baseUrl.startsWith("https") ? keepAliveAgent : keepAliveAgentHttp,
+      }).catch(() => null);
+      clearTimeout(robotsTimer);
+      hasRobots = robotsRes?.ok || false;
 
-    const robotsCtrl = new AbortController();
-    const robotsTimer = setTimeout(() => robotsCtrl.abort(), quick ? 3000 : 8000);
-    const robotsRes = await fetch(`${baseUrl}/robots.txt`, {
-      headers: {
-        "User-Agent": userAgents[0],
-        Accept: "text/plain,text/html,*/*",
-      },
-      signal: robotsCtrl.signal,
-    }).catch(() => null);
-    clearTimeout(robotsTimer);
-
-    // If robots.txt is blocked, we'll try common sitemap locations anyway
-    hasRobots = robotsRes?.ok || false;
-
-    const fetchSitemapUrls = async (
-      sUrl: string,
-      depth = 0,
-    ): Promise<string[]> => {
-      if (depth > 3) return []; // Increased depth for massive sites
-      try {
-        const sController = new AbortController();
-        const sTimeout = setTimeout(() => sController.abort(), quick ? 4000 : 10000);
-        const sRes = await fetch(sUrl, {
-          headers: {
-            "User-Agent":
-              userAgents[Math.floor(Math.random() * userAgents.length)],
-            Accept: "application/xml,text/xml,*/*",
-          },
-          signal: sController.signal,
+      let sitemapCount = 0;
+      const fetchSitemap = async (sUrl: string, d = 0): Promise<string[]> => {
+        if (d > 2 || sitemapCount > (quick ? 1000 : 5000)) return [];
+        const sc = new AbortController();
+        const st = setTimeout(() => sc.abort(), quick ? 3000 : 8000);
+        const sr = await fetch(sUrl, {
+          headers: { "User-Agent": userAgents[0], Accept: "application/xml,text/xml,*/*" },
+          signal: sc.signal,
+          agent: sUrl.startsWith("https") ? keepAliveAgent : keepAliveAgentHttp,
         }).catch(() => null);
-        clearTimeout(sTimeout);
-
-        if (sRes?.ok) {
-          const sText = await sRes.text();
-          // Improved loc regex to handle namespaces
-          const locs = sText.match(/<loc>(https?:\/\/[^<]+)<\/loc>/g);
-          if (locs) {
-            const extracted = locs.map((u) =>
-              u.replace(/<\/?loc>/g, "").trim(),
-            );
-            let all = [] as string[];
-            for (const loc of extracted) {
-              if (loc.endsWith(".xml") || loc.includes("sitemap")) {
-                const sub = await fetchSitemapUrls(loc, depth + 1);
-                all = all.concat(sub);
-              } else {
-                all.push(loc);
-              }
-            }
-            return all;
+        clearTimeout(st);
+        if (!sr?.ok) return [];
+        const txt = await sr.text();
+        const locs = txt.match(/<loc>(https?:\/\/[^<]+)<\/loc>/g);
+        if (!locs) return [];
+        const all: string[] = [];
+        for (const loc of locs.map(u => u.replace(/<\/?loc>/g, "").trim())) {
+          if (loc.endsWith(".xml") || loc.includes("sitemap")) {
+            const sub = await fetchSitemap(loc, d + 1);
+            all.push(...sub);
+          } else {
+            all.push(loc);
           }
         }
-      } catch (e) {}
-      return [];
-    };
+        return all;
+      };
 
-    if (hasRobots && robotsRes) {
-      const robotsText = await robotsRes.text();
-      const sitemapMatches = robotsText.match(
-        /Sitemap:\s*(https?:\/\/[^\s]+)/gi,
-      );
-      if (sitemapMatches) {
-        for (const m of sitemapMatches) {
-          const sUrl = m.replace(/Sitemap:\s*/i, "").trim();
-          const urls = await fetchSitemapUrls(sUrl);
-          sitemapUrls = sitemapUrls.concat(urls);
-          if (urls.length > 0) hasSitemap = true;
+      let sitemapUrls: string[] = [];
+
+      if (hasRobots && robotsRes) {
+        const sm = (await robotsRes.text()).match(/Sitemap:\s*(https?:\/\/[^\s]+)/gi);
+        if (sm) {
+          for (const m of sm) {
+            const urls = await fetchSitemap(m.replace(/Sitemap:\s*/i, "").trim());
+            sitemapUrls.push(...urls);
+            if (urls.length > 0) hasSitemap = true;
+          }
         }
       }
-    }
 
-    // Always try common locations in parallel
-    const commonSitemaps = [
-      "/sitemap.xml",
-      "/sitemap_index.xml",
-      "/sitemap-index.xml",
-      "/sitemaps/sitemap.xml",
-    ];
-
-    await Promise.all(commonSitemaps.map(async (path) => {
-      if (sitemapUrls.length > (quick ? 50 : 1000)) return;
-      const urls = await fetchSitemapUrls(`${baseUrl}${path}`);
-      if (urls.length > 0) {
-        sitemapUrls = sitemapUrls.concat(urls);
-        hasSitemap = true;
+      const commonResults = await Promise.allSettled(
+        ["/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml", "/sitemaps/sitemap.xml"].map(async (path) => {
+          if (sitemapUrls.length > (quick ? 200 : 2000)) return [];
+          const urls = await fetchSitemap(`${baseUrl}${path}`);
+          if (urls.length > 0) hasSitemap = true;
+          return urls;
+        })
+      );
+      for (const r of commonResults) {
+        if (r.status === "fulfilled") sitemapUrls.push(...r.value);
       }
-    }));
 
-    // Add sitemap URLs to queue if they match the domain
-    const startHost = new URL(startUrlNormalized).hostname.replace(
-      /^www\./,
-      "",
-    );
-    sitemapUrls.forEach((sUrl) => {
-      try {
-        const sHost = new URL(sUrl).hostname.replace(/^www\./, "");
-        if (sHost === startHost) {
+      sitemapCount = sitemapUrls.length;
+      const startHost = new URL(startUrlNormalized).hostname.replace(/^www\./, "");
+
+      // Opportunistically check each URL matching the host domain
+      for (const sUrl of sitemapUrls) {
+        try {
+          const sHost = new URL(sUrl).hostname.replace(/^www\./, "");
+          if (sHost !== startHost) continue;
           const sKey = sUrl.trim().replace(/\/$/, "").toLowerCase();
-          const sNoWww = sKey.replace(/^https?:\/\/(www\.)?/, "");
-          if (!visited.has(sKey) && !visited.has(sNoWww)) {
+          if (!visited.has(sKey)) {
             visited.add(sKey);
-            visited.add(sNoWww);
             queue.push({ url: sUrl, currentDepth: 1 });
           }
-        }
-      } catch (e) {}
-    });
-  } catch (e) {
-    console.error("Meta checks failed", e);
-  }
-  await db.updateStatus(userId, true, 0, startUrlNormalized, hasRobots, hasSitemap);
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.error("Sitemap processing error (non-fatal):", e);
+    }
+    db.updateStatus(userId, true, 0, startUrlNormalized, hasRobots, hasSitemap).catch(() => {});
+  })();
+
+  // Don't await sitemapPromise — crawl starts immediately
 
   let processedCount = 0;
   let startedCount = 0;
@@ -190,27 +179,16 @@ export async function audit(startUrl: string, config: AuditConfig) {
     let lastErrorMessage = "";
 
     try {
-      // Try fetch first (Fast)
+      // Try fetch first (Fast) with connection reuse
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
+        const timeout = setTimeout(() => controller.abort(), quick ? 8000 : 12000);
 
         const response = await fetch(url, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Sec-Ch-Ua": "\"Not/A)Brand\";v=\"8\", \"Chromium\";v=\"126\", \"Google Chrome\";v=\"126\"",
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": "\"Windows\"",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1"
-          },
+          headers: fetchHeaders,
           signal: controller.signal,
           redirect: "follow",
+          agent: url.startsWith("https") ? keepAliveAgent : keepAliveAgentHttp,
         });
         clearTimeout(timeout);
 
@@ -434,21 +412,18 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
       await db.savePage(userId, pageData);
 
-      if (currentDepth < depth) {
-        pageData.links.internal.forEach((link) => {
+      if (currentDepth < depth && processedCount < maxPages) {
+        const queueBudget = maxPages * 5 - processedCount;
+        let added = 0;
+        for (const link of pageData.links.internal) {
+          if (added >= queueBudget) break;
           const linkKey = link.trim().replace(/\/$/, "").toLowerCase();
-          const linkNoWww = linkKey.replace(/^https?:\/\/(www\.)?/, "");
-
-          if (
-            !visited.has(linkKey) &&
-            !visited.has(linkNoWww) &&
-            processedCount + queue.length < maxPages * (quick ? 3 : 10)
-          ) {
+          if (!visited.has(linkKey)) {
             visited.add(linkKey);
-            visited.add(linkNoWww);
             queue.push({ url: link, currentDepth: currentDepth + 1 });
+            added++;
           }
-        });
+        }
       }
     } else {
       console.log(`Saving fallback restricted page for ${url}`);
@@ -515,12 +490,12 @@ export async function audit(startUrl: string, config: AuditConfig) {
   }
 
   const runWorker = async () => {
-    const idleDelay = quick ? 50 : 1000;
-    const loopDelay = quick ? 20 : 500;
+    const idleDelay = quick ? 30 : 200;
+    const loopDelay = quick ? 10 : 100;
     while (startedCount < maxPages) {
       const task = queue.shift();
       if (!task) {
-        if (activeWorkers === 0) {
+        if (activeWorkers === 0 && queue.length === 0) {
           await new Promise((r) => setTimeout(r, idleDelay));
           if (queue.length === 0 && activeWorkers === 0) break;
           continue;
@@ -542,7 +517,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
   };
 
   try {
-    const workerCount = quick ? 30 : (process.env.RENDER || process.env.NODE_ENV === 'production' ? 12 : 20); // Increase concurrency heavily since most requests use fetch
+    const workerCount = quick ? 50 : (process.env.RENDER || process.env.NODE_ENV === 'production' ? 15 : 30);
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.all(workers);
   } catch (error) {
