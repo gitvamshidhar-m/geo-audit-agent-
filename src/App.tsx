@@ -891,7 +891,7 @@ export default function App() {
                 />
               </div>
               <button 
-                onClick={startAudit}
+                onClick={() => startAudit()}
                 disabled={isAuditing || !url}
                 className={cn(
                   "px-4 sm:px-8 h-full rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shrink-0",
