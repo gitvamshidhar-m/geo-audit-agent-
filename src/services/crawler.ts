@@ -189,7 +189,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
       // Try fetch first (Fast) with connection reuse
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), quick ? 5000 : 12000);
+        const timeout = setTimeout(() => controller.abort(), quick ? 3000 : 8000);
 
         const response = await fetch(url, {
           headers: fetchHeaders,
@@ -342,7 +342,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
               try {
                 let resp = await page
-                  .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 5000 : 15000 })
+                  .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 10000 })
                   .catch((err) => {
                     lastErrorMessage = err.message || "Playwright goto failed";
                     return null;
@@ -426,7 +426,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
       if (pageBuffer.length >= 20) await flushPages();
 
       if (currentDepth < depth && processedCount < maxPages) {
-        const queueBudget = maxPages * 5 - processedCount;
+        const queueBudget = maxPages * 2 - processedCount;
         let added = 0;
         for (const link of pageData.links.internal) {
           if (added >= queueBudget) break;
@@ -463,8 +463,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
         ? `Network Connection Error: ${lastErrorMessage}. Verify the domain is valid and live.`
         : "Website strictly blocks automated bots. Please try testing a different URL that allows standard bots.";
 
-      try {
-        await db.savePage(userId, {
+      pageBuffer.push({
           url,
           title,
           description,
@@ -496,15 +495,12 @@ export async function audit(startUrl: string, config: AuditConfig) {
             genericAlt: 0,
           },
         } as any);
-      } catch (saveErr: any) {
-        console.error(`Failed to save fallback page for ${url}:`, saveErr.message);
-      }
     }
   }
 
   const runWorker = async () => {
-    const idleDelay = quick ? 30 : 200;
-    const loopDelay = quick ? 10 : 100;
+    const idleDelay = quick ? 10 : 100;
+    const loopDelay = quick ? 5 : 50;
     while (startedCount < maxPages) {
       const task = queue.shift();
       if (!task) {
