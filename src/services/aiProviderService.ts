@@ -523,7 +523,7 @@ export async function chat(provider: AIProvider, query: string, pages: SEOPage[]
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: prompt }
         ],
-        model: "llama-3.3-70b-specdec",
+        model: "llama-3.3-70b-versatile",
       });
       replyText = response.choices[0].message.content || "No response";
       break;
