@@ -330,6 +330,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
                 return route.continue();
               });
 
+              let pageStartTime = Date.now();
               try {
                 let resp = await page
                   .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 10000 })
@@ -413,7 +414,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
     }
 
     if (htmlContent && htmlContent.length > 50) {
-      const loadTime = Date.now() - startTime;
+      const loadTime = Date.now() - pageStartTime;
       const isRoot = currentDepth === 0;
       const pageData = isRoot ? analyzeHTML(finalUrl, htmlContent, loadTime, headersMap) : quickAnalyzeHTML(finalUrl, htmlContent, loadTime, headersMap);
 
@@ -475,7 +476,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
             },
           ],
           links: { internal: [], external: [] },
-          loadTime: Date.now() - startTime,
+          loadTime: Date.now() - pageStartTime,
           score: 0,
           keywords: [],
           images: [],
