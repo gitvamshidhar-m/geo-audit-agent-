@@ -3395,10 +3395,13 @@ function PageSpeedPanel({ url, apiFetch, apiKey }: { url: string; apiFetch: (end
     setPsiData(null);
     try {
       const res = await apiFetch(`/api/pagespeed?url=${encodeURIComponent(psiUrl)}${apiKey ? `&key=${apiKey}` : ''}`);
-      if (!res.ok) throw new Error('PageSpeed fetch failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'PageSpeed fetch failed');
+      }
       setPsiData(await res.json());
     } catch (e: any) {
-      alert(e.message);
+      alert('PageSpeed: ' + e.message);
     } finally {
       setPsiLoading(false);
     }
@@ -3436,6 +3439,13 @@ function PageSpeedPanel({ url, apiFetch, apiKey }: { url: string; apiFetch: (end
             {psiLoading ? 'Loading...' : 'Analyze'}
           </button>
         </div>
+
+        {!apiKey && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-800 flex items-center gap-2">
+            <AlertTriangle size={14} />
+            Requires a free Google PageSpeed API key — click the gear icon ⚙️, add it under "PageSpeed API Key"
+          </div>
+        )}
 
         {psiData?.error && (
           <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">{psiData.error}</div>
