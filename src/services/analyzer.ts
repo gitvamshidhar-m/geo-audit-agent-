@@ -35,6 +35,39 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
     if (landmarkCount < 2) issues.push({ type: "info", message: "No semantic markup detected — missing HTML5 landmarks (<nav>, <main>, <article>, <header>, <footer>).", category: "on-page" });
   }
 
+  // Meta robots check
+  const robotsMatch = html.match(/<meta[^>]+name=(?:"robots"|'robots')[^>]+content=(?:"([^"]*)"|'([^']*)')/i);
+  const robotsValue = robotsMatch?.[1] || robotsMatch?.[2] || "";
+  if (!robotsValue) {
+    issues.push({ type: "info", message: "No meta robots tag found — search engines default to index, follow", category: "technical" });
+  } else {
+    const rv = robotsValue.toLowerCase();
+    if (rv.includes("noindex")) issues.push({ type: "warning", message: "Page is set to 'noindex' — it will not appear in search results.", category: "technical" });
+    if (rv.includes("nofollow")) issues.push({ type: "info", message: "Page is set to 'nofollow' — link equity will not pass to outbound links.", category: "technical" });
+    if (rv.includes("noarchive")) issues.push({ type: "info", message: "Page is set to 'noarchive' — search engines will not cache it.", category: "technical" });
+  }
+
+  // OG Image check
+  const ogImageMatch = html.match(/<meta[^>]+property=(?:"og:image"|'og:image')[^>]+content=(?:"([^"]*)"|'([^']*)')/i);
+  const ogImage = ogImageMatch?.[1] || ogImageMatch?.[2] || "";
+  if (!ogImage) issues.push({ type: "info", message: "Missing Open Graph image (og:image) — social previews will lack thumbnail.", category: "content" });
+
+  // Hreflang check
+  const hreflangRegex = /<link[^>]+rel=(?:"alternate"|'alternate')[^>]+hreflang=(?:"([^"]*)"|'([^']*)')/gi;
+  const hreflangTags: string[] = [];
+  let match;
+  while ((match = hreflangRegex.exec(html)) !== null) {
+    hreflangTags.push(match[1] || match[2]);
+  }
+  if (hreflangTags.length > 0) {
+    const hasXDefault = hreflangTags.some(h => h === "x-default");
+    if (!hasXDefault && hreflangTags.length > 1) issues.push({ type: "info", message: "Multiple hreflang tags without x-default fallback", category: "technical" });
+    const invalidCodes = hreflangTags.filter(h => h !== "x-default" && !/^[a-z]{2}(-[A-Z]{2})?$/.test(h));
+    if (invalidCodes.length > 0) issues.push({ type: "info", message: `${invalidCodes.length} hreflang tag(s) with invalid language codes`, category: "technical" });
+  } else {
+    issues.push({ type: "info", message: "No hreflang tags found — international SEO not configured", category: "technical" });
+  }
+
   let domain: string;
   try { domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch { domain = ""; }
 
@@ -244,14 +277,18 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
     issues.push({ type: "warning", message: "Placeholder text (Lorem Ipsum) detected", category: "content" });
   }
   const robotsValue = $('meta[name="robots"]').attr("content") || "";
-  if (robotsValue.toLowerCase().includes("noindex")) {
-    issues.push({ type: "warning", message: "Page is set to 'noindex' - it will not appear in search results.", category: "technical" });
-  }
-  if (robotsValue.toLowerCase().includes("nofollow")) {
-    issues.push({ type: "info", message: "Page is set to 'nofollow' - link equity will not pass to outbound links.", category: "technical" });
-  }
-  if (robotsValue.toLowerCase().includes("noarchive")) {
-    issues.push({ type: "info", message: "Page is set to 'noarchive' - search engines will not cache it.", category: "technical" });
+  if (!robotsValue) {
+    issues.push({ type: "info", message: "No meta robots tag found — search engines default to index, follow", category: "technical" });
+  } else {
+    if (robotsValue.toLowerCase().includes("noindex")) {
+      issues.push({ type: "warning", message: "Page is set to 'noindex' - it will not appear in search results.", category: "technical" });
+    }
+    if (robotsValue.toLowerCase().includes("nofollow")) {
+      issues.push({ type: "info", message: "Page is set to 'nofollow' - link equity will not pass to outbound links.", category: "technical" });
+    }
+    if (robotsValue.toLowerCase().includes("noarchive")) {
+      issues.push({ type: "info", message: "Page is set to 'noarchive' - search engines will not cache it.", category: "technical" });
+    }
   }
 
   // OG Image validation
@@ -265,6 +302,8 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
     if (!hasXDefault && hreflangTags.length > 1) issues.push({ type: "info", message: "Multiple hreflang tags without x-default fallback", category: "technical" });
     const invalidCodes = hreflangTags.filter(h => h !== "x-default" && !/^[a-z]{2}(-[A-Z]{2})?$/.test(h));
     if (invalidCodes.length > 0) issues.push({ type: "info", message: `${invalidCodes.length} hreflang tag(s) with invalid language codes`, category: "technical" });
+  } else {
+    issues.push({ type: "info", message: "No hreflang tags found — international SEO not configured", category: "technical" });
   }
 
   // Semantic HTML5 landmarks
