@@ -512,8 +512,13 @@ export default function App() {
       const res = await apiFetch('/api/audit/results');
       if (!res.ok) throw new Error("Results Fetch Failed");
       const data = await res.json();
-      setPages(data.pages);
-      setStats(data.stats);
+      if (data.stats && data.pages.length > 0) {
+        setPages(data.pages);
+        setStats(data.stats);
+      } else {
+        setPages([]);
+        setStats(null);
+      }
       
       // Trigger AI Insight if stats are available
       if (data.stats && data.pages.length > 0) {
