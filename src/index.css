@@ -28,10 +28,25 @@
   --border: #e2e8f0;
   --text-main: #1e293b;
   --text-muted: #64748b;
+  --bg-page: #f8fafc;
+  --bg-card: #ffffff;
+}
+
+.dark {
+  --bg-panel: #1e293b;
+  --bg-sidebar: #020617;
+  --accent: #60a5fa;
+  --border: #334155;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --bg-page: #0f172a;
+  --bg-card: #1e293b;
 }
 
 body {
-  @apply antialiased text-slate-900 bg-slate-50 font-sans;
+  @apply antialiased font-sans;
+  background-color: var(--bg-page);
+  color: var(--text-main);
 }
 
 .custom-scrollbar {

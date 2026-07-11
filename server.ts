@@ -569,6 +569,31 @@ async function startServer() {
     }
   });
 
+  app.post("/api/audit/share", async (req, res) => {
+    const userId = (req.headers["x-user-id"] as string) || "public";
+    try {
+      const pages = await db.getPages(userId);
+      const stats = await db.getStats(userId);
+      if (!stats || pages.length === 0) return res.status(400).json({ error: "No audit data to share" });
+      const code = Math.random().toString(36).substring(2, 10);
+      const url = stats.url || req.body.url || "unknown";
+      await db.saveShareReport(code, userId, url, stats, pages);
+      res.json({ code, shareUrl: `${req.protocol}://${req.get('host')}/?shared=${code}` });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/audit/shared/:code", async (req, res) => {
+    try {
+      const report = await db.getShareReport(req.params.code);
+      if (!report) return res.status(404).json({ error: "Report not found" });
+      res.json({ url: report.url, stats: JSON.parse(report.stats), pages: JSON.parse(report.pages), created_at: report.created_at });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     console.log("Initializing Vite middleware...");

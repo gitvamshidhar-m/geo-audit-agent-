@@ -51,7 +51,9 @@ import {
   Megaphone,
   Scale,
   ShieldAlert,
-  TrendingUp
+  TrendingUp,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 interface SaaSUser {
@@ -125,7 +127,7 @@ const getJitteredScore = (url: string, baseScore: number, index: number) => {
 
 export default function App() {
   console.log("App component rendering...");
-  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare' | 'competitors'>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(1000);
@@ -145,6 +147,18 @@ export default function App() {
   const [auditEndTime, setAuditEndTime] = useState<number | null>(null);
   const [auditElapsedTime, setAuditElapsedTime] = useState<number>(0);
   const [comparisons, setComparisons] = useState<{ url: string; timestamp: string; metrics: Record<string, any>; pagesCount: number }[]>([]);
+
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('seo_dark_mode');
+    return saved ? JSON.parse(saved) : false;
+  });
+  useEffect(() => { document.documentElement.classList.toggle('dark', darkMode); localStorage.setItem('seo_dark_mode', JSON.stringify(darkMode)); }, [darkMode]);
+
+  const [competitors, setCompetitors] = useState<{ url: string; stats: AuditStats | null; pagesCount: number; loading: boolean }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('seo_competitors') || '[]'); } catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem('seo_competitors', JSON.stringify(competitors)); }, [competitors]);
+  const [shareUrl, setShareUrl] = useState('');
 
   const saveComparison = () => {
     if (!stats || !url) return;
@@ -171,6 +185,36 @@ export default function App() {
   const removeComparison = (targetUrl: string) => {
     setComparisons(prev => prev.filter(c => c.url !== targetUrl));
   };
+
+  const handleShare = async () => {
+    try {
+      const res = await apiFetch('/api/audit/share', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      if (!res.ok) throw new Error('Share failed');
+      const data = await res.json();
+      setShareUrl(data.shareUrl);
+      await navigator.clipboard.writeText(data.shareUrl);
+    } catch (e: any) {
+      alert(e.message || 'Failed to share');
+    }
+  };
+
+  const auditCompetitor = async (targetUrl: string) => {
+    setCompetitors(prev => prev.map(c => c.url === targetUrl ? { ...c, loading: true } : c));
+    try {
+      const res = await apiFetch('/api/audit/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: targetUrl, depth: 2, maxPages: 50, quick: true, force: true })
+      });
+      if (!res.ok) throw new Error('Competitor audit failed');
+      // Wait for completion, fetch results
+      await new Promise(r => setTimeout(r, 5000));
+      const resultsRes = await apiFetch('/api/audit/results');
+      const data = await resultsRes.json();
+      setCompetitors(prev => prev.map(c => c.url === targetUrl ? { ...c, stats: data.stats, pagesCount: data.pages?.length || 0, loading: false } : c));
+    } catch (e) {
+      setCompetitors(prev => prev.map(c => c.url === targetUrl ? { ...c, loading: false } : c));
+    }
+  }; 
 
   useEffect(() => {
     let timer: any;
@@ -760,6 +804,13 @@ export default function App() {
               collapsed={isSidebarCollapsed}
             />
             <SidebarLink 
+              active={activeTab === 'competitors'} 
+              onClick={() => setActiveTab('competitors')} 
+              icon={<Target size={18} />} 
+              label="Competitors" 
+              collapsed={isSidebarCollapsed}
+            />
+            <SidebarLink 
               active={activeTab === 'promptfoo'} 
               onClick={() => setActiveTab('promptfoo')} 
               icon={<FlaskConical size={18} />} 
@@ -944,6 +995,19 @@ export default function App() {
                 Save
               </button>
             )}
+            {stats && (
+              <button onClick={handleShare} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all" title="Share report">
+                <Share2 size={16} />
+              </button>
+            )}
+            {shareUrl && (
+              <div className="absolute top-16 right-4 bg-white border border-slate-200 rounded-xl shadow-xl z-50 px-4 py-3 text-xs font-bold text-slate-700 max-w-xs">
+                Link copied! <span className="text-blue-600 break-all">{shareUrl}</span>
+              </div>
+            )}
+            <button onClick={() => setDarkMode(!darkMode)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all" title="Toggle dark mode">
+              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             {isAuditing && (
               <div className="flex flex-col gap-1 w-48 md:w-64 mr-2 shrink-0">
                  <div className="flex justify-between items-center text-[9px] font-bold text-blue-600 uppercase tracking-wider">
@@ -2150,6 +2214,82 @@ export default function App() {
                             else display = val !== undefined && val !== null ? String(val) + (row.suffix || '') : '—';
                             return <td key={c.url} className="text-center py-2.5 px-4 font-mono font-bold text-slate-800">{display}</td>;
                           })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+            {activeTab === 'competitors' && (
+              <motion.div key="competitors" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="w-full">
+                <div className="max-w-7xl mx-auto space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Competitor Comparison</h2>
+                    </div>
+                    {competitors.length > 0 && (
+                      <button onClick={() => setCompetitors([])} className="text-xs font-bold text-red-500 hover:text-red-600 px-3 py-1.5 bg-red-50 rounded-lg">Clear All</button>
+                    )}
+                  </div>
+                  <div className="flex gap-3 flex-wrap">
+                    <input type="text" placeholder="https://competitor.com" className="flex-1 min-w-[200px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLInputElement).value) { const val = (e.target as HTMLInputElement).value; setCompetitors(prev => [...prev, { url: val, stats: null, pagesCount: 0, loading: false }]); (e.target as HTMLInputElement).value = ''; } }}
+                    />
+                  </div>
+                  {competitors.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400">
+                      <Target size={48} className="mx-auto mb-4 text-slate-200" />
+                      <p className="text-sm font-bold">No competitors added</p>
+                      <p className="text-xs text-slate-300 mt-1">Add competitor URLs above, then click "Audit" to run a comparison.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="text-left py-3 px-4 font-black text-slate-500 uppercase tracking-wider">Metric</th>
+                            <th className="text-center py-3 px-4 font-black text-blue-700 uppercase tracking-wider">{url ? <span className="truncate max-w-[160px]">{url.replace(/^https?:\/\/(www\.)?/, '')} (you)</span> : 'Your Site'}</th>
+                            {competitors.map(c => (
+                              <th key={c.url} className="text-center py-3 px-4 font-black text-slate-700 uppercase tracking-wider">
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className="truncate max-w-[160px]">{c.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+                                  <button onClick={() => setCompetitors(prev => prev.filter(x => x.url !== c.url))} className="text-red-400 hover:text-red-600"><X size={12} /></button>
+                                </div>
+                                {c.loading ? (
+                                  <span className="text-[9px] text-blue-500">Auditing...</span>
+                                ) : !c.stats ? (
+                                  <button onClick={() => auditCompetitor(c.url)} className="text-[9px] font-bold text-blue-600 hover:text-blue-800">Run Audit</button>
+                                ) : (
+                                  <span className="text-[9px] text-emerald-600 font-medium">{c.pagesCount} pages</span>
+                                )}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { label: 'Total Pages', key: 'totalPages' },
+                            { label: 'Average Score', key: 'averageScore' },
+                            { label: 'Critical Issues', key: 'criticalIssues' },
+                            { label: 'Warning Issues', key: 'warningIssues' },
+                            { label: 'SEO Visibility Score', key: 'seoVisibilityScore' },
+                            { label: 'GEO Score', key: 'geoScore' },
+                            { label: 'AI Recognition Score', key: 'aiRecognitionScore' },
+                            { label: 'Structured Data', key: 'structuredDataCoverage', suffix: '%' },
+                            { label: 'Social Coverage', key: 'socialGraphCoverage', suffix: '%' },
+                            { label: 'Broken Links', key: 'brokenLinksCount' },
+                          ].map(row => (
+                            <tr key={row.key} className="border-b border-slate-100 hover:bg-slate-50">
+                              <td className="py-2.5 px-4 font-bold text-slate-600">{row.label}</td>
+                              <td className="text-center py-2.5 px-4 font-mono font-bold text-blue-700">{stats ? String((stats as any)[row.key] ?? '—') + (row.suffix || '') : '—'}</td>
+                              {competitors.map(c => {
+                                const val = c.stats ? (c.stats as any)[row.key] : undefined;
+                                return <td key={c.url} className="text-center py-2.5 px-4 font-mono font-bold text-slate-800">{val !== undefined ? String(val) + (row.suffix || '') : '—'}</td>;
+                              })}
                             </tr>
                           ))}
                         </tbody>

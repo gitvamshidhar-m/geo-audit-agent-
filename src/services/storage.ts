@@ -74,6 +74,15 @@ export async function initDB() {
       stats TEXT,
       pages_count INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS shared_reports (
+      code TEXT PRIMARY KEY,
+      userId TEXT,
+      url TEXT,
+      stats TEXT,
+      pages TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Seed default admin account
@@ -398,4 +407,13 @@ export async function resetData(userId: string) {
   db.prepare("DELETE FROM pages WHERE userId = ?").run(userId);
   await updateStatus(userId, false, 0, "", false, false);
   await clearCrawlState(userId);
+}
+
+export async function saveShareReport(code: string, userId: string, url: string, stats: any, pages: any[]) {
+  db.prepare("INSERT OR REPLACE INTO shared_reports (code, userId, url, stats, pages) VALUES (?, ?, ?, ?, ?)")
+    .run(code, userId, url, JSON.stringify(stats), JSON.stringify(pages));
+}
+
+export async function getShareReport(code: string) {
+  return db.prepare("SELECT * FROM shared_reports WHERE code = ?").get(code);
 }
