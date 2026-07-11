@@ -1047,7 +1047,24 @@ export default function App() {
           className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth"
         >
           <AnimatePresence mode="wait">
-            {activeTab === 'overview' && (
+            {!stats && activeTab === 'overview' && (
+              <motion.div key="welcome" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-3xl mx-auto text-center py-20">
+                <div className="w-20 h-20 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-8">
+                  <Search size={36} className="text-blue-600" />
+                </div>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-4">GEO Audit Agent</h1>
+                <p className="text-lg text-slate-500 mb-8 max-w-xl mx-auto">Enter a URL above and click <strong>Launch</strong> to start crawling and analyzing your site for GEO/SEO readiness.</p>
+                <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
+                  {['Crawl', 'Analyze', 'Report'].map((step, i) => (
+                    <div key={step} className="bg-white border border-slate-200 rounded-xl p-4">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-black mx-auto mb-2">{i + 1}</div>
+                      <div className="text-xs font-bold text-slate-700">{step}</div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+            {stats && activeTab === 'overview' && (
               <motion.div 
                 key="overview"
                 initial={{ opacity: 0, y: 10 }}
