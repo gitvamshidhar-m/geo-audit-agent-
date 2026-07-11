@@ -127,7 +127,7 @@ const getJitteredScore = (url: string, baseScore: number, index: number) => {
 
 export default function App() {
   console.log("App component rendering...");
-  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare' | 'competitors' | 'pagespeed'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare' | 'competitors'>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(1000);
@@ -270,8 +270,7 @@ export default function App() {
         groq: '',
         huggingface: '',
         deepseek: '',
-        perplexity: '',
-        pagespeed: ''
+        perplexity: ''
       };
     } catch (e) {
       return {
@@ -281,8 +280,7 @@ export default function App() {
         groq: '',
         huggingface: '',
         deepseek: '',
-        perplexity: '',
-        pagespeed: ''
+        perplexity: ''
       };
     }
   });
@@ -815,13 +813,6 @@ export default function App() {
               onClick={() => setActiveTab('competitors')} 
               icon={<Target size={18} />} 
               label="Competitors" 
-              collapsed={isSidebarCollapsed}
-            />
-            <SidebarLink 
-              active={activeTab === 'pagespeed'} 
-              onClick={() => setActiveTab('pagespeed')} 
-              icon={<Activity size={18} />} 
-              label="PageSpeed" 
               collapsed={isSidebarCollapsed}
             />
             <SidebarLink 
@@ -2330,9 +2321,6 @@ export default function App() {
                 </div>
               </motion.div>
             )}
-            {activeTab === 'pagespeed' && (
-              <PageSpeedPanel url={url} apiFetch={apiFetch} apiKey={apiKeys.pagespeed} />
-            )}
             {activeTab === 'promptfoo' && (
               <motion.div
                 key="promptfoo-panel"
@@ -3334,7 +3322,6 @@ export default function App() {
                         { id: 'anthropic', label: 'Anthropic Key', placeholder: 'sk-ant-...' },
                         { id: 'deepseek', label: 'DeepSeek Key', placeholder: 'sk-...' },
                         { id: 'perplexity', label: 'Perplexity Key', placeholder: 'pplx-...' },
-                        { id: 'pagespeed', label: 'PageSpeed API Key', placeholder: 'AIza...', link: 'https://developers.google.com/speed/docs/insights/v5/get-started' },
                         { id: 'groq', label: 'Groq API Key', placeholder: 'gsk_...' },
                         { id: 'huggingface', label: 'Hugging Face Token', placeholder: 'hf_...' },
                       ].map(field => (
@@ -3381,129 +3368,6 @@ export default function App() {
 
 
     </div>
-  );
-}
-
-function PageSpeedPanel({ url, apiFetch, apiKey }: { url: string; apiFetch: (endpoint: string, opts?: RequestInit) => Promise<Response>; apiKey?: string }) {
-  const [psiData, setPsiData] = useState<any>(null);
-  const [psiLoading, setPsiLoading] = useState(false);
-  const [psiUrl, setPsiUrl] = useState(url || '');
-
-  const fetchPSI = async () => {
-    if (!psiUrl) return;
-    setPsiLoading(true);
-    setPsiData(null);
-    try {
-      const res = await apiFetch(`/api/pagespeed?url=${encodeURIComponent(psiUrl)}${apiKey ? `&key=${apiKey}` : ''}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'PageSpeed fetch failed');
-      }
-      setPsiData(await res.json());
-    } catch (e: any) {
-      alert('PageSpeed: ' + e.message);
-    } finally {
-      setPsiLoading(false);
-    }
-  };
-
-  const lighthouse = psiData?.lighthouseResult;
-  const audits = lighthouse?.audits || {};
-  const categories = lighthouse?.categories || {};
-
-  const metrics = [
-    { label: 'LCP', id: 'largest-contentful-paint', unit: 's' },
-    { label: 'FCP', id: 'first-contentful-paint', unit: 's' },
-    { label: 'TBT', id: 'total-blocking-time', unit: 'ms' },
-    { label: 'CLS', id: 'cumulative-layout-shift', unit: '' },
-    { label: 'INP', id: 'interaction-to-next-paint', unit: 'ms' },
-    { label: 'TTFB', id: 'server-response-time', unit: 's' },
-  ];
-
-  const categoryKeys = ['performance', 'accessibility', 'seo', 'best-practices'];
-
-  return (
-    <motion.div key="pagespeed" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="w-full">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center gap-3 border-b border-slate-200 pb-6">
-          <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">PageSpeed Insights</h2>
-        </div>
-        <div className="flex gap-3">
-          <input type="text" value={psiUrl} onChange={e => setPsiUrl(e.target.value)}
-            placeholder="https://example.com"
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            onKeyDown={e => e.key === 'Enter' && fetchPSI()} />
-          <button onClick={fetchPSI} disabled={psiLoading}
-            className="px-6 h-full rounded-xl font-black text-xs uppercase tracking-[0.2em] bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-            {psiLoading ? 'Loading...' : 'Analyze'}
-          </button>
-        </div>
-
-        {!apiKey && (
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-800 flex items-center gap-2">
-            <AlertTriangle size={14} />
-            Requires a free Google PageSpeed API key — click the gear icon ⚙️, add it under "PageSpeed API Key"
-          </div>
-        )}
-
-        {psiData?.error && (
-          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">{psiData.error}</div>
-        )}
-
-        {lighthouse && (
-          <div className="space-y-6">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Showing results for: <span className="text-slate-700">{lighthouse.finalUrl || psiUrl}</span></div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {categoryKeys.map(key => {
-                const cat = categories[key];
-                if (!cat) return null;
-                const score = Math.round((cat.score || 0) * 100);
-                const color = score >= 90 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-500' : 'bg-rose-500';
-                return (
-                  <div key={key} className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-                    <div className={`w-10 h-10 ${color} text-white rounded-lg flex items-center justify-center text-sm font-black mx-auto mb-2`}>{score}</div>
-                    <div className="text-[10px] font-black uppercase text-slate-500 tracking-wider">{key}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-6">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Core Web Vitals</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {metrics.map(m => {
-                  const audit = audits[m.id];
-                  if (!audit) return null;
-                  const val = audit.numericValue;
-                  const displayVal = m.unit === 's' ? (val / 1000).toFixed(1) : m.unit === 'ms' ? Math.round(val).toString() : val?.toFixed(3);
-                  const threshold = m.id === 'largest-contentful-paint' ? 2500 :
-                    m.id === 'first-contentful-paint' ? 1800 :
-                    m.id === 'total-blocking-time' ? 200 :
-                    m.id === 'cumulative-layout-shift' ? 0.1 :
-                    m.id === 'interaction-to-next-paint' ? 200 : 800;
-                  const ok = val < threshold;
-                  return (
-                    <div key={m.id} className="p-3 bg-slate-50 rounded-lg">
-                      <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">{m.label}</div>
-                      <div className={`text-xl font-black ${ok ? 'text-emerald-600' : 'text-rose-600'}`}>{displayVal}{m.unit}</div>
-                      <div className="text-[9px] text-slate-400">{ok ? 'Good' : 'Needs work'}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {audits['screenshot-thumbnails'] && (
-              <div className="bg-white border border-slate-200 rounded-xl p-6 text-center">
-                <img src={audits['screenshot-thumbnails'].details?.data} alt="Screenshot" className="max-w-full rounded-lg mx-auto" style={{ maxHeight: 400 }} />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </motion.div>
   );
 }
 

@@ -594,24 +594,6 @@ async function startServer() {
     }
   });
 
-  app.get("/api/pagespeed", async (req, res) => {
-    const targetUrl = req.query.url as string;
-    const apiKey = (req.query.key as string) || process.env.PSI_API_KEY || '';
-    if (!targetUrl) return res.status(400).json({ error: "URL parameter required" });
-    try {
-      const psiRes = await fetch(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetUrl)}&category=performance&category=accessibility&category=best-practices&category=seo&strategy=mobile${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`);
-      const data = await psiRes.json();
-      if (!psiRes.ok) {
-        const reason = data?.error?.errors?.[0]?.reason || data?.error?.status || '';
-        const detail = data?.error?.message || "PageSpeed API error";
-        return res.status(502).json({ error: `${detail}${reason ? ` (${reason})` : ''}` });
-      }
-      res.json(data);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     console.log("Initializing Vite middleware...");
