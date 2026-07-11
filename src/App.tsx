@@ -270,7 +270,8 @@ export default function App() {
         groq: '',
         huggingface: '',
         deepseek: '',
-        perplexity: ''
+        perplexity: '',
+        pagespeed: ''
       };
     } catch (e) {
       return {
@@ -280,7 +281,8 @@ export default function App() {
         groq: '',
         huggingface: '',
         deepseek: '',
-        perplexity: ''
+        perplexity: '',
+        pagespeed: ''
       };
     }
   });
@@ -2329,7 +2331,7 @@ export default function App() {
               </motion.div>
             )}
             {activeTab === 'pagespeed' && (
-              <PageSpeedPanel url={url} apiFetch={apiFetch} />
+              <PageSpeedPanel url={url} apiFetch={apiFetch} apiKey={apiKeys.pagespeed} />
             )}
             {activeTab === 'promptfoo' && (
               <motion.div
@@ -3332,6 +3334,7 @@ export default function App() {
                         { id: 'anthropic', label: 'Anthropic Key', placeholder: 'sk-ant-...' },
                         { id: 'deepseek', label: 'DeepSeek Key', placeholder: 'sk-...' },
                         { id: 'perplexity', label: 'Perplexity Key', placeholder: 'pplx-...' },
+                        { id: 'pagespeed', label: 'PageSpeed API Key', placeholder: 'AIza...', link: 'https://developers.google.com/speed/docs/insights/v5/get-started' },
                         { id: 'groq', label: 'Groq API Key', placeholder: 'gsk_...' },
                         { id: 'huggingface', label: 'Hugging Face Token', placeholder: 'hf_...' },
                       ].map(field => (
@@ -3381,7 +3384,7 @@ export default function App() {
   );
 }
 
-function PageSpeedPanel({ url, apiFetch }: { url: string; apiFetch: (endpoint: string, opts?: RequestInit) => Promise<Response> }) {
+function PageSpeedPanel({ url, apiFetch, apiKey }: { url: string; apiFetch: (endpoint: string, opts?: RequestInit) => Promise<Response>; apiKey?: string }) {
   const [psiData, setPsiData] = useState<any>(null);
   const [psiLoading, setPsiLoading] = useState(false);
   const [psiUrl, setPsiUrl] = useState(url || '');
@@ -3391,7 +3394,7 @@ function PageSpeedPanel({ url, apiFetch }: { url: string; apiFetch: (endpoint: s
     setPsiLoading(true);
     setPsiData(null);
     try {
-      const res = await apiFetch(`/api/pagespeed?url=${encodeURIComponent(psiUrl)}`);
+      const res = await apiFetch(`/api/pagespeed?url=${encodeURIComponent(psiUrl)}${apiKey ? `&key=${apiKey}` : ''}`);
       if (!res.ok) throw new Error('PageSpeed fetch failed');
       setPsiData(await res.json());
     } catch (e: any) {
