@@ -23,6 +23,18 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
   if (!viewport) issues.push({ type: "critical", message: "Missing viewport meta tag (Mobile SEO)", category: "technical" });
   if (!canonical) issues.push({ type: "warning", message: "Missing canonical tag", category: "technical" });
 
+  // Semantic HTML5 landmarks (lightweight)
+  if (html.length > 100) {
+    const lc = html.toLowerCase();
+    const hasNav = lc.includes("<nav");
+    const hasMain = lc.includes("<main");
+    const hasArticle = lc.includes("<article");
+    const hasHeader = lc.includes("<header");
+    const hasFooter = lc.includes("<footer");
+    const landmarkCount = [hasNav, hasMain, hasArticle, hasHeader, hasFooter].filter(Boolean).length;
+    if (landmarkCount < 2) issues.push({ type: "info", message: "No semantic markup detected — missing HTML5 landmarks (<nav>, <main>, <article>, <header>, <footer>).", category: "on-page" });
+  }
+
   let domain: string;
   try { domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch { domain = ""; }
 
@@ -235,6 +247,35 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
   if (robotsValue.toLowerCase().includes("noindex")) {
     issues.push({ type: "warning", message: "Page is set to 'noindex' - it will not appear in search results.", category: "technical" });
   }
+  if (robotsValue.toLowerCase().includes("nofollow")) {
+    issues.push({ type: "info", message: "Page is set to 'nofollow' - link equity will not pass to outbound links.", category: "technical" });
+  }
+  if (robotsValue.toLowerCase().includes("noarchive")) {
+    issues.push({ type: "info", message: "Page is set to 'noarchive' - search engines will not cache it.", category: "technical" });
+  }
+
+  // OG Image validation
+  const ogImage = $('meta[property="og:image"]').attr("content") || "";
+  if (!ogImage) issues.push({ type: "info", message: "Missing Open Graph image (og:image) - social previews will lack thumbnail.", category: "content" });
+
+  // Hreflang validation
+  const hreflangTags = $('link[rel="alternate"][hreflang]').map((_, el) => $(el).attr("hreflang") || "").get();
+  if (hreflangTags.length > 0) {
+    const hasXDefault = hreflangTags.some(h => h === "x-default");
+    if (!hasXDefault && hreflangTags.length > 1) issues.push({ type: "info", message: "Multiple hreflang tags without x-default fallback", category: "technical" });
+    const invalidCodes = hreflangTags.filter(h => h !== "x-default" && !/^[a-z]{2}(-[A-Z]{2})?$/.test(h));
+    if (invalidCodes.length > 0) issues.push({ type: "info", message: `${invalidCodes.length} hreflang tag(s) with invalid language codes`, category: "technical" });
+  }
+
+  // Semantic HTML5 landmarks
+  const hasNav = lowerHtml.includes("<nav");
+  const hasMain = lowerHtml.includes("<main");
+  const hasArticle = lowerHtml.includes("<article");
+  const hasHeader = lowerHtml.includes("<header");
+  const hasFooter = lowerHtml.includes("<footer");
+  const hasAside = lowerHtml.includes("<aside");
+  const landmarkCount = [hasNav, hasMain, hasArticle, hasHeader, hasFooter, hasAside].filter(Boolean).length;
+  if (landmarkCount < 2) issues.push({ type: "info", message: "No semantic markup detected — missing HTML5 landmarks (<nav>, <main>, <article>, <header>, <footer>).", category: "on-page" });
 
   // Page elements extraction
   const pageElements = {
