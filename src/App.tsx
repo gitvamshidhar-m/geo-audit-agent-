@@ -2337,7 +2337,7 @@ export default function App() {
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
-                  <CrUXPanel initialUrl={url} />
+                  <CruxTab url={url} />
                 </div>
               </motion.div>
             )}
@@ -3436,19 +3436,19 @@ function ShareButtons({ url, title, className }: { url: string, title: string, c
   );
 }
 
-function CrUXPanel({ initialUrl }: { initialUrl?: string }) {
-  const [url, setUrl] = useState(initialUrl || 'https://example.com');
+function CruxTab({ url: propUrl }: { url: string }) {
+  const [searchUrl, setSearchUrl] = useState(propUrl || 'https://example.com');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const fetchCrux = async () => {
-    if (!url) return;
+    if (!searchUrl) return;
     setLoading(true);
     setError('');
     setData(null);
     try {
-      const res = await fetch(`/api/crux?url=${encodeURIComponent(url)}`);
+      const res = await fetch(`/api/crux?url=${encodeURIComponent(searchUrl)}`);
       const json = await res.json();
       if (json.error) setError(json.error);
       else setData(json);
@@ -3457,6 +3457,60 @@ function CrUXPanel({ initialUrl }: { initialUrl?: string }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatMetric = (key: string, metric: any) => {
+    const p75 = Number(metric?.percentiles?.p75);
+    if (isNaN(p75)) return 'N/A';
+    if (key === 'largest_contentful_paint' || key === 'first_contentful_paint') return (p75 / 1000).toFixed(1) + 's';
+    if (key === 'cumulative_layout_shift') return p75.toFixed(2);
+    return Math.round(p75) + (key === 'interaction_to_next_paint' || key === 'experimental_time_to_first_byte' || key === 'round_trip_time' ? 'ms' : '');
+  };
+
+  const getColor = (key: string, p75: number) => {
+    if (key === 'largest_contentful_paint') return p75 <= 2500 ? 'text-green-600' : p75 <= 4000 ? 'text-yellow-600' : 'text-red-600';
+    if (key === 'first_contentful_paint') return p75 <= 1800 ? 'text-green-600' : p75 <= 3000 ? 'text-yellow-600' : 'text-red-600';
+    if (key === 'cumulative_layout_shift') return p75 <= 0.1 ? 'text-green-600' : p75 <= 0.25 ? 'text-yellow-600' : 'text-red-600';
+    if (key === 'interaction_to_next_paint') return p75 <= 200 ? 'text-green-600' : p75 <= 500 ? 'text-yellow-600' : 'text-red-600';
+    if (key === 'experimental_time_to_first_byte') return p75 <= 800 ? 'text-green-600' : p75 <= 1800 ? 'text-yellow-600' : 'text-red-600';
+    return 'text-gray-600';
+  };
+
+  const relevantMetrics = ['largest_contentful_paint', 'first_contentful_paint', 'cumulative_layout_shift', 'interaction_to_next_paint', 'experimental_time_to_first_byte', 'round_trip_time'];
+  const labelMap: Record<string, string> = { largest_contentful_paint: 'LCP', first_contentful_paint: 'FCP', cumulative_layout_shift: 'CLS', interaction_to_next_paint: 'INP', experimental_time_to_first_byte: 'TTFB', round_trip_time: 'RTT' };
+
+  return (
+    <div className="p-6">
+      <h2 className="text-lg font-bold mb-1">Chrome User Experience Report (CrUX)</h2>
+      <p className="text-xs text-gray-500 mb-4">Real-user performance data from Chrome users. Enter a URL and click Fetch.</p>
+      <div className="flex gap-2 mb-4">
+        <input value={searchUrl} onChange={e => setSearchUrl(e.target.value)} placeholder="https://example.com" className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm" onKeyDown={e => e.key === 'Enter' && fetchCrux()} />
+        <button onClick={fetchCrux} disabled={loading} className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 shrink-0">{loading ? 'Fetching...' : 'Fetch'}</button>
+      </div>
+      {loading && <p className="text-sm text-gray-500">Loading...</p>}
+      {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded">{error}</p>}
+      {data && data.record?.metrics ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {relevantMetrics.map(k => {
+            const m = data.record.metrics[k];
+            if (!m?.percentiles?.p75) return null;
+            const p75 = Number(m.percentiles.p75);
+            if (isNaN(p75)) return null;
+            return (
+              <div key={k} className="p-4 border border-gray-200 rounded-lg bg-white">
+                <p className="text-xs font-bold uppercase text-gray-500 tracking-wider">{labelMap[k] || k}</p>
+                <p className={cn("text-2xl font-black mt-1", getColor(k, p75))}>{formatMetric(k, m)}</p>
+                <p className="text-xs text-gray-400 mt-1">p75</p>
+              </div>
+            );
+          })}
+        </div>
+      ) : data ? (
+        <p className="text-sm text-gray-500">No CrUX data available for this origin.</p>
+      ) : null}
+    </div>
+  );
+}
   };
 
   const metricLabels: Record<string, string> = {
