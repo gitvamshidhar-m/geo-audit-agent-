@@ -3459,44 +3459,68 @@ function CrUXPanel({ initialUrl }: { initialUrl?: string }) {
     }
   };
 
-  const formatMetric = (metric: any) => {
-    if (!metric?.percentiles?.p75) return 'N/A';
-    const p75 = metric.percentiles.p75;
-    if (metric.name === 'LCP') return `${(p75 / 1000).toFixed(1)}s`;
-    if (metric.name === 'FCP') return `${(p75 / 1000).toFixed(1)}s`;
-    if (metric.name === 'CLS') return p75.toFixed(2);
-    if (metric.name === 'TBT') return `${Math.round(p75)}ms`;
-    if (metric.name === 'INP') return `${Math.round(p75)}ms`;
-    return p75;
+  const metricLabels: Record<string, string> = {
+    largest_contentful_paint: 'LCP',
+    first_contentful_paint: 'FCP',
+    cumulative_layout_shift: 'CLS',
+    interaction_to_next_paint: 'INP',
+    experimental_time_to_first_byte: 'TTFB',
+    round_trip_time: 'RTT',
   };
 
-  const getColor = (name: string, p75: number) => {
-    if (name === 'LCP') return p75 <= 2500 ? 'text-emerald-600' : p75 <= 4000 ? 'text-amber-600' : 'text-rose-600';
-    if (name === 'FCP') return p75 <= 1800 ? 'text-emerald-600' : p75 <= 3000 ? 'text-amber-600' : 'text-rose-600';
-    if (name === 'CLS') return p75 <= 0.1 ? 'text-emerald-600' : p75 <= 0.25 ? 'text-amber-600' : 'text-rose-600';
-    if (name === 'TBT') return p75 <= 200 ? 'text-emerald-600' : p75 <= 500 ? 'text-amber-600' : 'text-rose-600';
-    if (name === 'INP') return p75 <= 200 ? 'text-emerald-600' : p75 <= 500 ? 'text-amber-600' : 'text-rose-600';
+  const metricUnits: Record<string, string> = {
+    largest_contentful_paint: 's',
+    first_contentful_paint: 's',
+    cumulative_layout_shift: '',
+    interaction_to_next_paint: 'ms',
+    experimental_time_to_first_byte: 'ms',
+    round_trip_time: 'ms',
+  };
+
+  const formatMetric = (key: string, metric: any) => {
+    if (!metric?.percentiles?.p75) return 'N/A';
+    const p75 = metric.percentiles.p75;
+    if (key === 'largest_contentful_paint' || key === 'first_contentful_paint') return `${(p75 / 1000).toFixed(1)}s`;
+    if (key === 'cumulative_layout_shift') return p75.toFixed(2);
+    return `${Math.round(p75)}${metricUnits[key] || ''}`;
+  };
+
+  const getColor = (key: string, p75: number) => {
+    if (key === 'largest_contentful_paint') return p75 <= 2500 ? 'text-emerald-600' : p75 <= 4000 ? 'text-amber-600' : 'text-rose-600';
+    if (key === 'first_contentful_paint') return p75 <= 1800 ? 'text-emerald-600' : p75 <= 3000 ? 'text-amber-600' : 'text-rose-600';
+    if (key === 'cumulative_layout_shift') return p75 <= 0.1 ? 'text-emerald-600' : p75 <= 0.25 ? 'text-amber-600' : 'text-rose-600';
+    if (key === 'interaction_to_next_paint') return p75 <= 200 ? 'text-emerald-600' : p75 <= 500 ? 'text-amber-600' : 'text-rose-600';
+    if (key === 'experimental_time_to_first_byte') return p75 <= 800 ? 'text-emerald-600' : p75 <= 1800 ? 'text-amber-600' : 'text-rose-600';
     return 'text-slate-600';
   };
+
+  const relevantMetrics = ['largest_contentful_paint', 'first_contentful_paint', 'cumulative_layout_shift', 'interaction_to_next_paint', 'experimental_time_to_first_byte', 'round_trip_time'];
 
   return (
     <div className="p-6 space-y-6">
       <h2 className="text-lg font-bold text-slate-900">Chrome User Experience Report (CrUX)</h2>
-      <p className="text-xs text-slate-500">Real-user performance data from Chrome users.</p>
+      <p className="text-xs text-slate-500">Real-user performance data from Chrome users. Enter a URL to fetch metrics.</p>
       <div className="flex gap-2">
         <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com" className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm" onKeyDown={e => e.key === 'Enter' && fetchCrux()} />
-        <button onClick={fetchCrux} disabled={loading} className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">{loading ? 'Loading...' : 'Fetch'}</button>
+        <button onClick={fetchCrux} disabled={loading} className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 shrink-0">{loading ? 'Loading...' : 'Fetch'}</button>
       </div>
       {error && <p className="text-xs text-rose-600">{error}</p>}
       {data && data.record?.metrics && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {Object.entries(data.record.metrics).map(([key, metric]: [string, any]) => (
-            <div key={key} className="p-4 border border-slate-200 rounded-lg">
-              <p className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">{key}</p>
-              <p className={cn("text-2xl font-black mt-1", getColor(key, metric.percentiles?.p75 || 0))}>{formatMetric(metric)}</p>
-              {metric.good && <p className="text-[10px] text-slate-400">{Math.round(metric.good * 100)}% good</p>}
-            </div>
-          ))}
+          {relevantMetrics.map(key => {
+            const metric = data.record.metrics[key];
+            if (!metric?.percentiles?.p75) return null;
+            return (
+              <div key={key} className="p-4 border border-slate-200 rounded-lg">
+                <p className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">{metricLabels[key] || key}</p>
+                <p className={cn("text-2xl font-black mt-1", getColor(key, metric.percentiles.p75))}>{formatMetric(key, metric)}</p>
+                <p className="text-[10px] text-slate-400">p75 ({metricLabels[key] || key})</p>
+              </div>
+            );
+          })}
+          {relevantMetrics.every(k => !data.record.metrics[k]?.percentiles?.p75) && (
+            <p className="text-xs text-slate-400 col-span-full">No standard metrics available for this origin.</p>
+          )}
         </div>
       )}
       {data && !data.record && <p className="text-xs text-slate-400">No CrUX data available for this origin.</p>}
