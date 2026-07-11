@@ -816,6 +816,13 @@ export default function App() {
               collapsed={isSidebarCollapsed}
             />
             <SidebarLink 
+              active={activeTab === 'crux'} 
+              onClick={() => setActiveTab('crux')} 
+              icon={<BarChartIcon size={18} />} 
+              label="CrUX" 
+              collapsed={isSidebarCollapsed}
+            />
+            <SidebarLink 
               active={activeTab === 'promptfoo'} 
               onClick={() => setActiveTab('promptfoo')} 
               icon={<FlaskConical size={18} />} 
@@ -2321,6 +2328,19 @@ export default function App() {
                 </div>
               </motion.div>
             )}
+            {activeTab === 'crux' && (
+              <motion.div
+                key="crux-panel"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="w-full"
+              >
+                <div className="max-w-7xl mx-auto">
+                  <CrUXPanel initialUrl={url} />
+                </div>
+              </motion.div>
+            )}
             {activeTab === 'promptfoo' && (
               <motion.div
                 key="promptfoo-panel"
@@ -3412,6 +3432,74 @@ function ShareButtons({ url, title, className }: { url: string, title: string, c
           {s.icon}
         </a>
       ))}
+    </div>
+  );
+}
+
+function CrUXPanel({ initialUrl }: { initialUrl?: string }) {
+  const [url, setUrl] = useState(initialUrl || '');
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchCrux = async () => {
+    if (!url) return;
+    setLoading(true);
+    setError('');
+    setData(null);
+    try {
+      const res = await fetch(`/api/crux?url=${encodeURIComponent(url)}`);
+      const json = await res.json();
+      if (json.error) setError(json.error);
+      else setData(json);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatMetric = (metric: any) => {
+    if (!metric?.percentiles?.p75) return 'N/A';
+    const p75 = metric.percentiles.p75;
+    if (metric.name === 'LCP') return `${(p75 / 1000).toFixed(1)}s`;
+    if (metric.name === 'FCP') return `${(p75 / 1000).toFixed(1)}s`;
+    if (metric.name === 'CLS') return p75.toFixed(2);
+    if (metric.name === 'TBT') return `${Math.round(p75)}ms`;
+    if (metric.name === 'INP') return `${Math.round(p75)}ms`;
+    return p75;
+  };
+
+  const getColor = (name: string, p75: number) => {
+    if (name === 'LCP') return p75 <= 2500 ? 'text-emerald-600' : p75 <= 4000 ? 'text-amber-600' : 'text-rose-600';
+    if (name === 'FCP') return p75 <= 1800 ? 'text-emerald-600' : p75 <= 3000 ? 'text-amber-600' : 'text-rose-600';
+    if (name === 'CLS') return p75 <= 0.1 ? 'text-emerald-600' : p75 <= 0.25 ? 'text-amber-600' : 'text-rose-600';
+    if (name === 'TBT') return p75 <= 200 ? 'text-emerald-600' : p75 <= 500 ? 'text-amber-600' : 'text-rose-600';
+    if (name === 'INP') return p75 <= 200 ? 'text-emerald-600' : p75 <= 500 ? 'text-amber-600' : 'text-rose-600';
+    return 'text-slate-600';
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <h2 className="text-lg font-bold text-slate-900">Chrome User Experience Report (CrUX)</h2>
+      <p className="text-xs text-slate-500">Real-user performance data from Chrome users.</p>
+      <div className="flex gap-2">
+        <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com" className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm" onKeyDown={e => e.key === 'Enter' && fetchCrux()} />
+        <button onClick={fetchCrux} disabled={loading} className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">{loading ? 'Loading...' : 'Fetch'}</button>
+      </div>
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+      {data && data.record?.metrics && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {Object.entries(data.record.metrics).map(([key, metric]: [string, any]) => (
+            <div key={key} className="p-4 border border-slate-200 rounded-lg">
+              <p className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">{key}</p>
+              <p className={cn("text-2xl font-black mt-1", getColor(key, metric.percentiles?.p75 || 0))}>{formatMetric(metric)}</p>
+              {metric.good && <p className="text-[10px] text-slate-400">{Math.round(metric.good * 100)}% good</p>}
+            </div>
+          ))}
+        </div>
+      )}
+      {data && !data.record && <p className="text-xs text-slate-400">No CrUX data available for this origin.</p>}
     </div>
   );
 }

@@ -536,6 +536,51 @@ export async function audit(startUrl: string, config: AuditConfig) {
     console.error("Audit error:", error);
   } finally {
     await flushPages();
+
+    // Link health check — check internal links for broken/404
+    try {
+      const pages = await db.getPages(userId);
+      const linkToPages = new Map<string, Set<string>>();
+      for (const page of pages) {
+        for (const link of (page.links?.internal || [])) {
+          if (!linkToPages.has(link)) linkToPages.set(link, new Set());
+          linkToPages.get(link)!.add(page.url);
+        }
+      }
+      const uniqueLinks = [...linkToPages.keys()];
+      const brokenLinks: string[] = [];
+      const concurrency = 10;
+      for (let i = 0; i < uniqueLinks.length; i += concurrency) {
+        const batch = uniqueLinks.slice(i, i + concurrency);
+        const results = await Promise.allSettled(
+          batch.map(async (url) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 5000);
+            try {
+              const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: fetchHeaders });
+              if (res.status >= 400) throw new Error(`${res.status}`);
+            } finally { clearTimeout(timer); }
+          })
+        );
+        results.forEach((r, idx) => {
+          if (r.status === "rejected") brokenLinks.push(batch[idx]);
+        });
+      }
+      if (brokenLinks.length > 0) {
+        for (const page of pages) {
+          const brokenOnPage = (page.links?.internal || []).filter((l: string) => brokenLinks.includes(l));
+          if (brokenOnPage.length > 0) {
+            (page.issues || []).push({
+              type: "warning",
+              message: `${brokenOnPage.length} broken internal link(s) detected: ${brokenOnPage.slice(0, 3).join(", ")}${brokenOnPage.length > 3 ? ` +${brokenOnPage.length - 3} more` : ""}`,
+              category: "technical",
+            });
+          }
+        }
+        await db.savePagesBatch(userId, pages);
+      }
+    } catch (e) { console.error("Link health check failed:", e); }
+
     if (browser) await browser.close().catch(() => {});
     if (sharedContext) await sharedContext.close().catch(() => {});
     await db.updateStatus(userId, false, 100, "Completed");

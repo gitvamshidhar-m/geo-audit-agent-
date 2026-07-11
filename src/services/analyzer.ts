@@ -21,18 +21,25 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
   else if (titleText.length > 60) issues.push({ type: "warning", message: "Title too long (>60 chars)", category: "on-page" });
   if (!description) issues.push({ type: "critical", message: "Missing meta description", category: "on-page" });
   if (!viewport) issues.push({ type: "critical", message: "Missing viewport meta tag (Mobile SEO)", category: "technical" });
+  else {
+    const vp = viewport.toLowerCase();
+    if (!vp.includes("width=device-width") && !vp.includes("width=device-width")) issues.push({ type: "warning", message: "Viewport does not use width=device-width — page may not scale on mobile", category: "technical" });
+    if (!vp.includes("initial-scale=1") && !vp.includes("initial-scale=1.0")) issues.push({ type: "warning", message: "Viewport missing initial-scale=1 — may cause zoom issues on mobile", category: "technical" });
+    if (vp.includes("user-scalable=no") || vp.includes("user-scalable=0") || vp.includes("maximum-scale=1") || vp.includes("maximum-scale=1.0")) issues.push({ type: "info", message: "Viewport restricts user zoom (user-scalable=no or maximum-scale=1) — accessibility concern", category: "technical" });
+  }
   if (!canonical) issues.push({ type: "warning", message: "Missing canonical tag", category: "technical" });
 
-  // Semantic HTML5 landmarks (lightweight)
+  // Semantic HTML5 + ARIA landmarks (lightweight)
   if (html.length > 100) {
     const lc = html.toLowerCase();
-    const hasNav = lc.includes("<nav");
-    const hasMain = lc.includes("<main");
-    const hasArticle = lc.includes("<article");
-    const hasHeader = lc.includes("<header");
-    const hasFooter = lc.includes("<footer");
-    const landmarkCount = [hasNav, hasMain, hasArticle, hasHeader, hasFooter].filter(Boolean).length;
-    if (landmarkCount < 2) issues.push({ type: "info", message: "No semantic markup detected — missing HTML5 landmarks (<nav>, <main>, <article>, <header>, <footer>).", category: "on-page" });
+    const hasNav = lc.includes("<nav") || lc.includes('role="navigation"') || lc.includes("role='navigation'");
+    const hasMain = lc.includes("<main") || lc.includes('role="main"') || lc.includes("role='main'");
+    const hasArticle = lc.includes("<article") || lc.includes('role="article"') || lc.includes("role='article'");
+    const hasHeader = lc.includes("<header") || lc.includes('role="banner"') || lc.includes("role='banner'");
+    const hasFooter = lc.includes("<footer") || lc.includes('role="contentinfo"') || lc.includes("role='contentinfo'");
+    const hasAside = lc.includes("<aside") || lc.includes('role="complementary"') || lc.includes("role='complementary'");
+    const landmarkCount = [hasNav, hasMain, hasArticle, hasHeader, hasFooter, hasAside].filter(Boolean).length;
+    if (landmarkCount < 2) issues.push({ type: "info", message: "No semantic markup detected — missing HTML5/ARIA landmarks (<nav>, <main>, <article>, <header>, <footer>, role=\"navigation\", role=\"main\", etc.).", category: "on-page" });
   }
 
   // Meta robots check
@@ -306,15 +313,15 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
     issues.push({ type: "info", message: "No hreflang tags found — international SEO not configured", category: "technical" });
   }
 
-  // Semantic HTML5 landmarks
-  const hasNav = lowerHtml.includes("<nav");
-  const hasMain = lowerHtml.includes("<main");
-  const hasArticle = lowerHtml.includes("<article");
-  const hasHeader = lowerHtml.includes("<header");
-  const hasFooter = lowerHtml.includes("<footer");
-  const hasAside = lowerHtml.includes("<aside");
+  // Semantic HTML5 + ARIA landmarks
+  const hasNav = lowerHtml.includes("<nav") || lowerHtml.includes('role="navigation"') || lowerHtml.includes("role='navigation'");
+  const hasMain = lowerHtml.includes("<main") || lowerHtml.includes('role="main"') || lowerHtml.includes("role='main'");
+  const hasArticle = lowerHtml.includes("<article") || lowerHtml.includes('role="article"') || lowerHtml.includes("role='article'");
+  const hasHeader = lowerHtml.includes("<header") || lowerHtml.includes('role="banner"') || lowerHtml.includes("role='banner'");
+  const hasFooter = lowerHtml.includes("<footer") || lowerHtml.includes('role="contentinfo"') || lowerHtml.includes("role='contentinfo'");
+  const hasAside = lowerHtml.includes("<aside") || lowerHtml.includes('role="complementary"') || lowerHtml.includes("role='complementary'");
   const landmarkCount = [hasNav, hasMain, hasArticle, hasHeader, hasFooter, hasAside].filter(Boolean).length;
-  if (landmarkCount < 2) issues.push({ type: "info", message: "No semantic markup detected — missing HTML5 landmarks (<nav>, <main>, <article>, <header>, <footer>).", category: "on-page" });
+  if (landmarkCount < 2) issues.push({ type: "info", message: "No semantic markup detected — missing HTML5/ARIA landmarks (<nav>, <main>, <article>, <header>, <footer>, role=\"navigation\", role=\"main\", etc.).", category: "on-page" });
 
   // Page elements extraction
   const pageElements = {
@@ -531,8 +538,11 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
   const viewport = $('meta[name="viewport"]').attr("content") || "";
   if (!viewport) {
     issues.push({ type: "critical", message: "Missing viewport meta tag (Mobile SEO)", category: "technical" });
-  } else if (viewport.includes("user-scalable=no") || viewport.includes("maximum-scale=1")) {
-    issues.push({ type: "warning", message: "Viewport restricts scaling - blocks Accessibility and Mobile SEO", category: "technical" });
+  } else {
+    const vp = viewport.toLowerCase();
+    if (!vp.includes("width=device-width")) issues.push({ type: "warning", message: "Viewport does not use width=device-width - page may not scale on mobile", category: "technical" });
+    if (!vp.includes("initial-scale=1") && !vp.includes("initial-scale=1.0")) issues.push({ type: "warning", message: "Viewport missing initial-scale=1 - may cause zoom issues on mobile", category: "technical" });
+    if (vp.includes("user-scalable=no") || vp.includes("user-scalable=0") || vp.includes("maximum-scale=1") || vp.includes("maximum-scale=1.0")) issues.push({ type: "info", message: "Viewport restricts user zoom (user-scalable=no or maximum-scale=1) - accessibility concern", category: "technical" });
   }
 
   const favicon = $('link[rel="icon"], link[rel="shortcut icon"]').attr("href") || "";

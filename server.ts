@@ -33,6 +33,23 @@ async function startServer() {
       res.json({ ok: true });
     });
     app.get("/api/health", (req, res) => res.json({ status: "ok", version: process.env.RENDER_GIT_COMMIT?.substring(0,7) || "dev" }));
+    app.get("/api/crux", async (req, res) => {
+      const apiKey = process.env.CRUX_API_KEY;
+      if (!apiKey) return res.json({ error: "CrUX API key not configured. Set CRUX_API_KEY env var." });
+      const url = req.query.url as string;
+      if (!url) return res.status(400).json({ error: "url query param required" });
+      try {
+        const cruxRes = await fetch("https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=" + apiKey, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ origin: url }),
+        });
+        const data = await cruxRes.json();
+        res.json(data);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
   
   app.post("/api/ai/insights", async (req, res) => {
     const { provider, stats, pages, keys } = req.body;
