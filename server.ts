@@ -599,8 +599,8 @@ async function startServer() {
     if (!targetUrl) return res.status(400).json({ error: "URL parameter required" });
     try {
       const psiRes = await fetch(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetUrl)}&category=performance&category=accessibility&category=best-practices&category=seo&strategy=mobile`);
-      if (!psiRes.ok) return res.status(502).json({ error: "PageSpeed API error" });
       const data = await psiRes.json();
+      if (!psiRes.ok) return res.status(502).json({ error: data?.error?.message || "PageSpeed API error" });
       res.json(data);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
