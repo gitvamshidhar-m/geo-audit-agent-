@@ -601,7 +601,11 @@ async function startServer() {
     try {
       const psiRes = await fetch(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetUrl)}&category=performance&category=accessibility&category=best-practices&category=seo&strategy=mobile${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''}`);
       const data = await psiRes.json();
-      if (!psiRes.ok) return res.status(502).json({ error: data?.error?.message || "PageSpeed API error" });
+      if (!psiRes.ok) {
+        const reason = data?.error?.errors?.[0]?.reason || data?.error?.status || '';
+        const detail = data?.error?.message || "PageSpeed API error";
+        return res.status(502).json({ error: `${detail}${reason ? ` (${reason})` : ''}` });
+      }
       res.json(data);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
