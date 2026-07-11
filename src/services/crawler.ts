@@ -160,7 +160,6 @@ export async function audit(startUrl: string, config: AuditConfig) {
   async function getPageData(url: string, currentDepth: number) {
     if (processedCount >= maxPages) return;
 
-    const startTime = Date.now();
     const progress = Math.min(
       99,
       Math.round((processedCount / maxPages) * 100),
@@ -176,11 +175,12 @@ export async function audit(startUrl: string, config: AuditConfig) {
     let finalUrl = url;
     let headersMap: Record<string, string> = {};
     let lastErrorMessage = "";
-    let pageStartTime = Date.now();
+    let pageLoadTime = 0;
 
     try {
       // Try fetch first (Fast) with AbortController timeout
       try {
+        const fetchStart = Date.now();
         const ac3 = new AbortController();
         const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 15000);
         const response = await fetch(url, {
@@ -189,6 +189,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           redirect: "follow",
         });
         clearTimeout(t3);
+        pageLoadTime = Date.now() - fetchStart;
 
         if (response.status) {
           finalUrl = response.url;
@@ -332,12 +333,14 @@ export async function audit(startUrl: string, config: AuditConfig) {
               });
 
               try {
+                const pwStart = Date.now();
                 let resp = await page
                   .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 10000 })
                   .catch((err) => {
                     lastErrorMessage = err.message || "Playwright goto failed";
                     return null;
                   });
+                if (!pageLoadTime) pageLoadTime = Date.now() - pwStart;
                 
                 // Cloudflare Bypass Attempt
                 const title = await page.title().catch(() => "");
@@ -414,7 +417,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
     }
 
     if (htmlContent && htmlContent.length > 50) {
-      const loadTime = Date.now() - pageStartTime;
+      const loadTime = pageLoadTime;
       const isRoot = currentDepth === 0;
       const pageData = isRoot ? analyzeHTML(finalUrl, htmlContent, loadTime, headersMap) : quickAnalyzeHTML(finalUrl, htmlContent, loadTime, headersMap);
 
@@ -476,7 +479,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
             },
           ],
           links: { internal: [], external: [] },
-          loadTime: Date.now() - pageStartTime,
+          loadTime: pageLoadTime,
           score: 0,
           keywords: [],
           images: [],
