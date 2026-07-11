@@ -176,6 +176,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
     let finalUrl = url;
     let headersMap: Record<string, string> = {};
     let lastErrorMessage = "";
+    let pageStartTime = Date.now();
 
     try {
       // Try fetch first (Fast) with AbortController timeout
@@ -330,7 +331,6 @@ export async function audit(startUrl: string, config: AuditConfig) {
                 return route.continue();
               });
 
-              let pageStartTime = Date.now();
               try {
                 let resp = await page
                   .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 10000 })
