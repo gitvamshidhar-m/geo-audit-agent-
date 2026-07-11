@@ -170,8 +170,8 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
   const pScore = loadTime < 500 ? 95 : loadTime < 1000 ? 85 : loadTime < 2000 ? 70 : loadTime < 4000 ? 50 : 30;
   const performance = {
     performanceScore: pScore,
-    fcp: Number(((loadTime * 0.3) / 1000).toFixed(1)),
-    lcp: Number(((loadTime * 0.6) / 1000).toFixed(1)),
+    fcp: Math.min(3.0, Number(((loadTime * 0.3) / 1000).toFixed(1))),
+    lcp: Math.min(4.0, Number(((loadTime * 0.6) / 1000).toFixed(1))),
     cls: Number((Math.random() * 0.08).toFixed(3)),
     tbt: Math.floor(pScore > 80 ? 50 : pScore > 60 ? 150 : 300),
   };
@@ -585,8 +585,8 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
   const pScore = loadTime < 500 ? 95 : loadTime < 1000 ? 85 : loadTime < 2000 ? 70 : loadTime < 4000 ? 50 : 30;
   const performance = {
     performanceScore: pScore,
-    fcp: Number(((loadTime * 0.3) / 1000).toFixed(1)),
-    lcp: Number(((loadTime * 0.6) / 1000).toFixed(1)),
+    fcp: Math.min(3.0, Number(((loadTime * 0.3) / 1000).toFixed(1))),
+    lcp: Math.min(4.0, Number(((loadTime * 0.6) / 1000).toFixed(1))),
     cls: Number((Math.random() * 0.08).toFixed(3)),
     tbt: Math.floor(pScore > 80 ? 50 : pScore > 60 ? 150 : 300),
   };
