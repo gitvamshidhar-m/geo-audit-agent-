@@ -193,7 +193,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
       try {
         const fetchStart = Date.now();
         const ac3 = new AbortController();
-        const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 15000);
+        const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 10000);
         const response = await fetch(url, {
           headers: fetchHeaders,
           signal: ac3.signal,
@@ -245,7 +245,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
         .toLowerCase();
       const isRoot = urlKey === startKey;
       
-      const isLikelySPA = htmlContent && htmlContent.length < 3000 && htmlContent.toLowerCase().includes('<script');
+      const isLikelySPA = !htmlContent || (htmlContent.length < 800 && htmlContent.toLowerCase().includes('<script'));
 
       if (!htmlContent || isLikelySPA) {
         // In Quick mode, skip Playwright entirely - use raw fetch only
@@ -343,10 +343,10 @@ export async function audit(startUrl: string, config: AuditConfig) {
                 return route.continue();
               });
 
-              try {
-                const pwStart = Date.now();
-                let resp = await page
-                  .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 10000 })
+try {
+                    const pwStart = Date.now();
+                    let resp = await page
+                      .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 8000 })
                   .catch((err) => {
                     lastErrorMessage = err.message || "Playwright goto failed";
                     return null;
@@ -563,13 +563,13 @@ export async function audit(startUrl: string, config: AuditConfig) {
       }
       const uniqueLinks = [...linkToPages.keys()];
       const brokenLinks: string[] = [];
-      const concurrency = 10;
+      const concurrency = 25;
       for (let i = 0; i < uniqueLinks.length; i += concurrency) {
         const batch = uniqueLinks.slice(i, i + concurrency);
         const results = await Promise.allSettled(
           batch.map(async (url) => {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 5000);
+            const timer = setTimeout(() => controller.abort(), 3000);
             try {
               const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: fetchHeaders });
               if (res.status >= 400) throw new Error(`${res.status}`);
