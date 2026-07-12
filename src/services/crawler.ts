@@ -641,14 +641,15 @@ try {
         lastErrorMessage.toLowerCase().includes("empty");
 
       const title = isConnectionError ? "Failed to Connect to Website" : "Crawl Blocked by Bot Protection";
+      const scraperHint = process.env.SCRAPER_API_KEY ? "" : " Enable ScraperAPI (SCRAPER_API_KEY env var) for proxy bypass.";
       const description = isConnectionError 
         ? `The page at ${url} could not be reached. Connection status details: ${lastErrorMessage}. Please verify that the URL is spelled correctly, the website is online, and it is accessible from the public internet.`
-        : `The content for ${url} could not be retrieved. This website is actively using anti-bot protection (like Cloudflare, Datadome, or a WAF) which blocked or challenged our automated crawler. Because we could not bypass the challenge, the crawl stopped here with a score of 0.`;
+        : `The content for ${url} could not be retrieved. This website is actively using anti-bot protection (like Cloudflare, Datadome, or a WAF) which blocked or challenged our automated crawler. Because we could not bypass the challenge, the crawl stopped here with a score of 0.${scraperHint}`;
       
       const category = "technical";
       const issueMsg = isConnectionError 
         ? `Network Connection Error: ${lastErrorMessage}. Verify the domain is valid and live.`
-        : "Website strictly blocks automated bots. Please try testing a different URL that allows standard bots.";
+        : `Website strictly blocks automated bots. Please try testing a different URL that allows standard bots.${scraperHint}`;
 
       pageBuffer.push({
           url,
