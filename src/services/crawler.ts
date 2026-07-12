@@ -241,24 +241,14 @@ export async function audit(startUrl: string, config: AuditConfig) {
         lastErrorMessage = e.message || "Fetch failed";
       }
 
-      // Fallback to Playwright if fetch failed or returned invalid content
-      const urlKey = url
-        .replace(/\/$/, "")
-        .replace(/^https?:\/\/(www\.)?/, "")
-        .toLowerCase();
-      const startKey = startUrlNormalized
-        .replace(/\/$/, "")
-        .replace(/^https?:\/\/(www\.)?/, "")
-        .toLowerCase();
-      const isRoot = urlKey === startKey;
-      
-      const isLikelySPA = !htmlContent || (htmlContent.length < 800 && htmlContent.toLowerCase().includes('<script'));
+      // Fallback to Playwright ONLY if:
+      // 1. Fetch completely failed (no content at all)
+      // 2. AND it's the root page (depth 0) — subpages skip Playwright entirely
+      // 3. AND not in quick mode
+      const isLikelySPA = !htmlContent || (htmlContent.length < 800 && htmlContent.toLowerCase().includes('<script') && !htmlContent.toLowerCase().includes('<body'));
+      const shouldTryPlaywright = !quick && isLikelySPA && currentDepth === 0;
 
-      if (!htmlContent || isLikelySPA) {
-        // In Quick mode, skip Playwright entirely - use raw fetch only
-        if (quick) {
-          if (!htmlContent) htmlContent = "";
-        } else {
+      if (shouldTryPlaywright) {
           // Wait if too many Playwright instances are running to prevent memory crashes
           while (activePlaywrights >= MAX_PLAYWRIGHTS) {
             await new Promise((r) => setTimeout(r, 50));
@@ -402,7 +392,6 @@ try {
           } finally {
             activePlaywrights--;
           }
-        }
       }
     } catch (e: any) {
       console.error(`Outer crawl logic failed for ${url}:`, e.message);
@@ -536,7 +525,7 @@ try {
   };
 
   try {
-    const workerCount = isRender ? (quick ? 8 : 5) : (quick ? 20 : 10);
+    const workerCount = isRender ? (quick ? 20 : 12) : (quick ? 40 : 20);
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.race([
       Promise.all(workers),
