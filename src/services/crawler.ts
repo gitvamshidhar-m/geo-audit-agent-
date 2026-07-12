@@ -149,8 +149,19 @@ export async function audit(startUrl: string, config: AuditConfig) {
   let activePlaywrights = 0;
   let browser: any = null;
   let isLaunchingBrowser = false;
+  let browserLastUsed = 0;
   const pageBuffer: any[] = [];
   let flushScheduled = false;
+
+  async function closeBrowserIfIdle() {
+    if (browser && browserLastUsed > 0 && Date.now() - browserLastUsed > 15000 && activePlaywrights === 0) {
+      try { await browser.close().catch(() => {}); } catch {}
+      if (sharedContext) { try { await sharedContext.close().catch(() => {}); } catch {} }
+      browser = null;
+      sharedContext = null;
+      console.log("Closed idle browser to free memory");
+    }
+  }
   async function flushPages() {
     if (pageBuffer.length === 0) return;
     const batch = pageBuffer.splice(0);
@@ -380,6 +391,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
                 if (resp) {
                    headersMap["x-actual-status"] = resp.status().toString();
                 }
+                browserLastUsed = Date.now();
 
                 const finalUrlKey = finalUrl.replace(/\/$/, "").toLowerCase();
                 visited.add(finalUrlKey);
@@ -508,10 +520,12 @@ export async function audit(startUrl: string, config: AuditConfig) {
       const task = queue.shift();
       if (!task) {
         if (activeWorkers === 0 && queue.length === 0) {
+          await closeBrowserIfIdle();
           await new Promise((r) => setTimeout(r, idleDelay));
           if (queue.length === 0 && activeWorkers === 0) break;
           continue;
         }
+        await closeBrowserIfIdle();
         await new Promise((r) => setTimeout(r, loopDelay));
         continue;
       }

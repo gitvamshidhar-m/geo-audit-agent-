@@ -50,7 +50,47 @@ async function startServer() {
         res.status(500).json({ error: e.message });
       }
     });
-  
+
+    app.get("/api/robots-check", async (req, res) => {
+      const url = req.query.url as string;
+      if (!url) return res.status(400).json({ error: "url query param required" });
+      try {
+        const origin = new URL(url.startsWith("http") ? url : "https://" + url).origin;
+        const results: any = { origin, hasRobots: false, hasSitemap: false, robotsReferencesSitemap: false, sitemapReachable: false, recommendations: [] };
+
+        // Check robots.txt
+        try {
+          const r = await fetch(origin + "/robots.txt", { headers: { "User-Agent": "Mozilla/5.0" } });
+          if (r.ok) {
+            results.hasRobots = true;
+            const txt = await r.text();
+            results.robotsReferencesSitemap = /sitemap:/i.test(txt);
+            if (!results.robotsReferencesSitemap) results.recommendations.push("robots.txt does not declare a Sitemap: directive — add it so crawlers can discover your sitemap.");
+          } else {
+            results.recommendations.push("No robots.txt found at " + origin + "/robots.txt — create one to guide crawlers.");
+          }
+        } catch { results.recommendations.push("robots.txt could not be fetched."); }
+
+        // Check sitemap
+        const sitemapPaths = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml"];
+        for (const p of sitemapPaths) {
+          try {
+            const s = await fetch(origin + p, { headers: { "User-Agent": "Mozilla/5.0" } });
+            if (s.ok) { results.hasSitemap = true; results.sitemapReachable = true; break; }
+          } catch { /* try next */ }
+        }
+        if (!results.hasSitemap) results.recommendations.push("No sitemap.xml found at common paths — submit one in Google Search Console.");
+
+        if (results.hasRobots && results.hasSitemap && results.robotsReferencesSitemap) {
+          results.recommendations.push("robots.txt and sitemap are correctly configured and cross-referenced.");
+        }
+
+        res.json(results);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
   app.post("/api/ai/insights", async (req, res) => {
     const { provider, stats, pages, keys } = req.body;
     try {

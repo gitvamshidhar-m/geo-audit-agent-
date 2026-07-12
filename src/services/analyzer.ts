@@ -796,3 +796,60 @@ function calculateGeoScore(elements: any, wordCount: number, hasStructuredData: 
   
   return Math.min(100, score);
 }
+
+export interface GeoFactor {
+  factor: string;
+  impact: number;
+  met: boolean;
+  detail: string;
+}
+
+export function getGeoScoreBreakdown(page: SEOPage): { score: number; factors: GeoFactor[] } {
+  const elements = page.headers || { h1: [], h2: [], h3: [], h4: [], h5: [], h6: [] };
+  const wordCount = page.wordCount || 0;
+  const hasStructuredData = (page.structuredData?.length || 0) > 0;
+  const headings = [...elements.h1, ...elements.h2, ...elements.h3].join(" ").toLowerCase();
+  const questions = ["what", "how", "why", "who", "where", "when", "guide", "tutorial", "best"];
+  const questionCount = questions.filter(q => headings.includes(q)).length;
+  const listCount = (page as any).listCount ?? 0;
+
+  const factors: GeoFactor[] = [
+    {
+      factor: "Structured Data (Schema)",
+      impact: 15,
+      met: hasStructuredData,
+      detail: hasStructuredData
+        ? `Page has ${page.structuredData?.length} schema block(s) — LLMs can extract entities cleanly.`
+        : "No JSON-LD/schema found — AI engines must infer structure from raw HTML.",
+    },
+    {
+      factor: "Question-Guided Headings",
+      impact: Math.min(15, questionCount * 3),
+      met: questionCount > 0,
+      detail: questionCount > 0
+        ? `${questionCount} question-style keyword(s) in headings (what/how/why…) aid LLM retrieval.`
+        : "Headings lack question intent (What/How/Why) that AI assistants match against queries.",
+    },
+    {
+      factor: "Extractable Lists",
+      impact: listCount > 3 ? 10 : 0,
+      met: listCount > 3,
+      detail: listCount > 3
+        ? `${listCount} lists detected — highly extractable for snippets.`
+        : "Fewer than 3 lists — break content into bullet/numbered lists for better extraction.",
+    },
+    {
+      factor: "Information Density",
+      impact: wordCount > 500 && wordCount < 2000 ? 10 : wordCount >= 2000 ? 5 : 0,
+      met: wordCount >= 500,
+      detail:
+        wordCount > 500 && wordCount < 2000
+          ? `Word count ${wordCount} is in the ideal 500–2000 range.`
+          : wordCount >= 2000
+          ? `Word count ${wordCount} is substantial (long-form, +5).`
+          : `Word count ${wordCount} is thin (<500) — AI engines prefer deeper coverage.`,
+    },
+  ];
+
+  return { score: calculateGeoScore(elements, wordCount, hasStructuredData), factors };
+}

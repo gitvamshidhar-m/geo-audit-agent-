@@ -53,7 +53,8 @@ import {
   ShieldAlert,
   TrendingUp,
   Sun,
-  Moon
+  Moon,
+  Monitor
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 interface SaaSUser {
@@ -90,6 +91,7 @@ import { SEOCheckPanel } from './components/SEOCheckPanel';
 import { Terminal } from 'lucide-react';
 import { SEOPage, AuditStats, AIInsightData } from './types/seo';
 import { generateSEOReportPDF } from './utils/pdfGenerator';
+import { getGeoScoreBreakdown } from './services/analyzer';
 
 // Sidebar Link Helper
 function SidebarLink({ active, onClick, icon, label, collapsed }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; collapsed?: boolean }) {
@@ -139,6 +141,10 @@ export default function App() {
   const [pages, setPages] = useState<SEOPage[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [selectedPage, setSelectedPage] = useState<SEOPage | null>(null);
+  const [pageCrux, setPageCrux] = useState<any>(null);
+  const [pageCruxLoading, setPageCruxLoading] = useState(false);
+  const [robotsCheck, setRobotsCheck] = useState<any>(null);
+  const [robotsChecking, setRobotsChecking] = useState(false);
   const [aiInsight, setAiInsight] = useState<AIInsightData | string | null>(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [agentProgress, setAgentProgress] = useState<string>('');
@@ -148,11 +154,36 @@ export default function App() {
   const [auditElapsedTime, setAuditElapsedTime] = useState<number>(0);
   const [comparisons, setComparisons] = useState<{ url: string; timestamp: string; metrics: Record<string, any>; pagesCount: number }[]>([]);
 
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('seo_dark_mode');
-    return saved ? JSON.parse(saved) : false;
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
+    const saved = localStorage.getItem('seo_theme');
+    return saved ? (JSON.parse(saved) as 'light' | 'dark' | 'system') : 'system';
   });
-  useEffect(() => { document.documentElement.classList.toggle('dark', darkMode); localStorage.setItem('seo_dark_mode', JSON.stringify(darkMode)); }, [darkMode]);
+  useEffect(() => {
+    const apply = () => {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = theme === 'dark' || (theme === 'system' && prefersDark);
+      document.documentElement.classList.toggle('dark', isDark);
+    };
+    apply();
+    localStorage.setItem('seo_theme', JSON.stringify(theme));
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [theme]);
+  const cycleTheme = () => setTheme(t => (t === 'light' ? 'dark' : t === 'dark' ? 'system' : 'light'));
+
+  useEffect(() => {
+    if (!selectedPage?.url) { setPageCrux(null); return; }
+    let cancelled = false;
+    setPageCruxLoading(true);
+    setPageCrux(null);
+    fetch(`/api/crux?url=${encodeURIComponent(selectedPage.url)}`)
+      .then(r => r.json())
+      .then(json => { if (!cancelled && json.record?.metrics) setPageCrux(json); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setPageCruxLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedPage]);
 
   const [competitors, setCompetitors] = useState<{ url: string; stats: AuditStats | null; pagesCount: number; loading: boolean }[]>(() => {
     try { return JSON.parse(localStorage.getItem('seo_competitors') || '[]'); } catch { return []; }
@@ -667,9 +698,18 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!stats || pages.length === 0) return;
-    generateSEOReportPDF(url, pages, stats, aiInsight, auditEndTime);
+    let crux: any = null;
+    try {
+      const target = stats?.url || url;
+      if (target) {
+        const r = await fetch(`/api/crux?url=${encodeURIComponent(target)}`);
+        const json = await r.json();
+        if (json.record?.metrics) crux = json;
+      }
+    } catch { /* CrUX optional */ }
+    generateSEOReportPDF(url, pages, stats, aiInsight, auditEndTime, crux);
   };
 
   const resetData = async () => {
@@ -1017,8 +1057,8 @@ export default function App() {
                 Link copied! <span className="text-blue-600 break-all">{shareUrl}</span>
               </div>
             )}
-            <button onClick={() => setDarkMode(!darkMode)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all" title="Toggle dark mode">
-              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            <button onClick={cycleTheme} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all" title={`Theme: ${theme}`}>
+              {theme === 'light' ? <Sun size={16} /> : theme === 'dark' ? <Moon size={16} /> : <Monitor size={16} />}
             </button>
             {isAuditing && (
               <div className="flex flex-col gap-1 w-48 md:w-64 mr-2 shrink-0">
@@ -1182,7 +1222,7 @@ export default function App() {
                         <p className="text-slate-400 text-xs font-medium leading-relaxed">Verification of crawl-critical assets and security parameters at the root level.</p>
                       </div>
 
-                      <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
+                       <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
                         <DomainCheckItem 
                           label="Robots.txt" 
                           status={stats.globalTechnicalHealth?.robotsTxtExists ?? false} 
@@ -1203,6 +1243,35 @@ export default function App() {
                           status={stats.globalTechnicalHealth?.hasSitemapInRobots ?? false} 
                           desc={stats.globalTechnicalHealth?.hasSitemapInRobots ? "Verified in Robots" : "Not Linked"}
                         />
+                      </div>
+                      <div className="lg:col-span-4 relative z-10">
+                        <button
+                          onClick={async () => {
+                            if (!stats?.url && !url) return;
+                            setRobotsChecking(true);
+                            setRobotsCheck(null);
+                            try {
+                              const target = stats?.url || url;
+                              const r = await fetch(`/api/robots-check?url=${encodeURIComponent(target)}`);
+                              setRobotsCheck(await r.json());
+                            } catch (e: any) { setRobotsCheck({ recommendations: [e.message] }); }
+                            finally { setRobotsChecking(false); }
+                          }}
+                          disabled={robotsChecking}
+                          className="mt-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        >
+                          {robotsChecking ? 'Validating…' : 'Re-validate Robots & Sitemap'}
+                        </button>
+                        {robotsCheck?.recommendations?.length > 0 && (
+                          <ul className="mt-3 space-y-1.5">
+                            {robotsCheck.recommendations.map((rec: string, i: number) => (
+                              <li key={i} className={cn("text-[10px] leading-relaxed flex gap-2", rec.includes("correctly configured") ? "text-emerald-300" : "text-amber-300")}>
+                                <span>{rec.includes("correctly configured") ? "✓" : "•"}</span>
+                                <span>{rec}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     </div>
 
@@ -2501,7 +2570,7 @@ export default function App() {
                 </div>
               </div>
 
-                <div className="grid grid-cols-3 gap-4 mb-12">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-12">
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded">
                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Health</div>
                     <div className="text-2xl font-black text-slate-900">{getJitteredScore(selectedPage.url, selectedPage.score, 0)}%</div>
@@ -2514,9 +2583,49 @@ export default function App() {
                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Text/Code</div>
                     <div className="text-2xl font-black text-slate-900">{selectedPage.textToCodeRatio}%</div>
                   </div>
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded">
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Word Count</div>
+                    <div className={cn("text-2xl font-black", (selectedPage.wordCount || 0) < 300 ? "text-rose-600" : (selectedPage.wordCount || 0) < 600 ? "text-amber-600" : "text-slate-900")}>
+                      {selectedPage.wordCount || 0}
+                    </div>
+                    {(selectedPage.wordCount || 0) < 300 && <div className="text-[8px] font-bold text-rose-500 uppercase mt-1">Thin content</div>}
+                  </div>
                 </div>
               
-              <div className="space-y-12">
+               <div className="space-y-12">
+                {/* GEO Visibility Score Breakdown */}
+                {(() => {
+                  const geo = getGeoScoreBreakdown(selectedPage);
+                  return (
+                    <section className="p-6 border border-teal-200/60 rounded-2xl bg-teal-50/20 relative overflow-hidden backdrop-blur-sm shadow-sm">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full blur-[40px] pointer-events-none" />
+                      <h4 className="text-[11px] font-bold uppercase tracking-widest text-slate-900 mb-4 flex justify-between items-center">
+                        <span>GEO Visibility Breakdown</span>
+                        <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase", geo.score >= 75 ? "bg-teal-100 text-teal-700" : geo.score >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700")}>
+                          {geo.score}/100
+                        </span>
+                      </h4>
+                      <div className="space-y-2.5">
+                        {geo.factors.map((f, i) => (
+                          <div key={i} className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-100">
+                            <div className={cn("mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0", f.met ? "bg-teal-100 text-teal-600" : "bg-rose-100 text-rose-500")}>
+                              {f.met ? "✓" : "!"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-center gap-2">
+                                <span className="text-xs font-bold text-slate-900">{f.factor}</span>
+                                <span className={cn("text-[10px] font-black", f.met ? "text-teal-600" : "text-rose-500")}>{f.met ? `+${f.impact}` : "0"}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">{f.detail}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">GEO (Generative Engine Optimization) score estimates how easily AI assistants (ChatGPT, Perplexity, Gemini) can read, extract, and cite this page.</p>
+                    </section>
+                  );
+                })()}
+
                 {/* AI Content Authenticity & Plagiarism Scanner */}
                 <section className="p-6 border border-slate-200/60 rounded-2xl bg-slate-50/20 relative overflow-hidden backdrop-blur-sm shadow-sm">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-[40px] pointer-events-none" />
@@ -2871,6 +2980,48 @@ export default function App() {
                   </section>
                 )}
 
+                {/* CrUX Real-User Metrics for this page's origin */}
+                <section>
+                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-slate-900 mb-6 border-b border-slate-100 pb-2 flex justify-between items-center">
+                    <span>CrUX — Real User Metrics</span>
+                    <span className="text-[9px] font-normal normal-case text-slate-400 tracking-normal">Chrome UX Report</span>
+                  </h4>
+                  {pageCruxLoading && <p className="text-xs text-slate-400">Loading real-user field data…</p>}
+                  {!pageCruxLoading && !pageCrux && <p className="text-xs text-slate-400 italic">No CrUX data available for this origin.</p>}
+                  {pageCrux && pageCrux.record?.metrics && (() => {
+                    const cruxLabels: Record<string, string> = { largest_contentful_paint: 'LCP', first_contentful_paint: 'FCP', cumulative_layout_shift: 'CLS', interaction_to_next_paint: 'INP', experimental_time_to_first_byte: 'TTFB', round_trip_time: 'RTT' };
+                    const cruxUnits: Record<string, string> = { largest_contentful_paint: 's', first_contentful_paint: 's', cumulative_layout_shift: '', interaction_to_next_paint: 'ms', experimental_time_to_first_byte: 'ms', round_trip_time: 'ms' };
+                    const fmt = (k: string, m: any) => {
+                      const p75 = Number(m?.percentiles?.p75);
+                      if (isNaN(p75)) return 'N/A';
+                      if (k === 'largest_contentful_paint' || k === 'first_contentful_paint') return (p75 / 1000).toFixed(1) + 's';
+                      if (k === 'cumulative_layout_shift') return p75.toFixed(2);
+                      return Math.round(p75) + (cruxUnits[k] || '');
+                    };
+                    const color = (k: string, p75: number) => {
+                      if (k === 'largest_contentful_paint') return p75 <= 2500 ? 'text-emerald-600' : p75 <= 4000 ? 'text-amber-600' : 'text-rose-600';
+                      if (k === 'first_contentful_paint') return p75 <= 1800 ? 'text-emerald-600' : p75 <= 3000 ? 'text-amber-600' : 'text-rose-600';
+                      if (k === 'cumulative_layout_shift') return p75 <= 0.1 ? 'text-emerald-600' : p75 <= 0.25 ? 'text-amber-600' : 'text-rose-600';
+                      if (k === 'interaction_to_next_paint') return p75 <= 200 ? 'text-emerald-600' : p75 <= 500 ? 'text-amber-600' : 'text-rose-600';
+                      if (k === 'experimental_time_to_first_byte') return p75 <= 800 ? 'text-emerald-600' : p75 <= 1800 ? 'text-amber-600' : 'text-rose-600';
+                      return 'text-slate-600';
+                    };
+                    const keys = ['largest_contentful_paint', 'first_contentful_paint', 'cumulative_layout_shift', 'interaction_to_next_paint', 'experimental_time_to_first_byte', 'round_trip_time'];
+                    return (
+                      <div className="grid grid-cols-2 gap-y-6 gap-x-8">
+                        {keys.map(k => {
+                          const m = pageCrux.record.metrics[k];
+                          const p75 = Number(m?.percentiles?.p75);
+                          if (isNaN(p75)) return null;
+                          return (
+                            <SpeedMetric key={k} label={cruxLabels[k] || k} value={fmt(k, m)} sub="p75 field" status={color(k, p75) === 'text-emerald-600' ? 'good' : color(k, p75) === 'text-rose-600' ? 'warning' : 'warning'} />
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </section>
+
                 <section>
                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-slate-900 mb-6 border-b border-slate-100 pb-2">Technical Issues</h4>
                    <div className="space-y-3">
@@ -3082,6 +3233,8 @@ export default function App() {
                     </div>
 
                     {/* Social Card Mock */}
+                    <div>
+                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Social Share Preview</div>
                     <div className="border border-slate-200 rounded-xl overflow-hidden max-w-sm shadow-sm">
                       <div className={cn("aspect-[1.91/1] bg-slate-100 flex items-center justify-center relative", !(selectedPage.ogTags || {})['og:image'] && "bg-slate-200")}>
                         {(selectedPage.ogTags || {})['og:image'] ? (

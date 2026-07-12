@@ -2,7 +2,7 @@
 import autoTable from 'jspdf-autotable';
 import { SEOPage, AuditStats, AIInsightData, GEOResult } from '../types/seo.js';
 
-export function generateSEOReportPDF(domain: string, pages: SEOPage[], stats: AuditStats, aiInsight: any, auditEndTime: number | null) {
+export function generateSEOReportPDF(domain: string, pages: SEOPage[], stats: AuditStats, aiInsight: any, auditEndTime: number | null, crux?: any) {
   const doc = new jsPDF();
   
   // Custom font styling
@@ -268,6 +268,42 @@ export function generateSEOReportPDF(domain: string, pages: SEOPage[], stats: Au
       2: { cellWidth: 85 }
     }
   });
+
+  // CrUX Real-User Metrics
+  if (crux && crux.record?.metrics) {
+    if (yPos > 200) { doc.addPage(); yPos = 20; }
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42);
+    doc.text('8. CrUX — Real User Metrics (Chrome)', 14, yPos);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Field data collected from real Chrome users over the last 28 days.', 14, yPos + 6);
+    yPos += 14;
+
+    const cruxDefs: { key: string; label: string; unit: string; good: number; poor: number }[] = [
+      { key: 'largest_contentful_paint', label: 'LCP', unit: 's', good: 2500, poor: 4000 },
+      { key: 'first_contentful_paint', label: 'FCP', unit: 's', good: 1800, poor: 3000 },
+      { key: 'cumulative_layout_shift', label: 'CLS', unit: '', good: 0.1, poor: 0.25 },
+      { key: 'interaction_to_next_paint', label: 'INP', unit: 'ms', good: 200, poor: 500 },
+    ];
+    const body = cruxDefs
+      .filter(d => crux.record.metrics[d.key]?.percentiles?.p75 != null)
+      .map(d => {
+        const p75 = Number(crux.record.metrics[d.key].percentiles.p75);
+        const val = d.unit === 's' ? (p75 / 1000).toFixed(1) + 's' : d.unit === 'ms' ? Math.round(p75) + 'ms' : p75.toFixed(2);
+        const rating = p75 <= d.good ? 'Good' : p75 <= d.poor ? 'Needs Work' : 'Poor';
+        return [d.label, val, rating];
+      });
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Metric', 'p75', 'Rating']],
+      body,
+      headStyles: { fillColor: [15, 23, 42] },
+      styles: { fontSize: 9, overflow: 'linebreak' },
+      columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 30 }, 2: { cellWidth: 40 } },
+    });
+    yPos = (doc as any).lastAutoTable.finalY + 15;
+  }
 
   doc.save('seo-audit-report.pdf');
 }
