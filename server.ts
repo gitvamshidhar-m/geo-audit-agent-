@@ -1,5 +1,6 @@
 import fs from "fs";
 import crypto from "crypto";
+import { promisify } from "util";
 import express from "express";
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -9,6 +10,19 @@ import * as crawler from "./src/services/crawler.js";
 import * as db from "./src/services/storage.js";
 import * as ai from "./src/services/aiProviderService.js";
 
+const scryptAsync = promisify(crypto.scrypt);
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = await scryptAsync(password, salt, 64) as Buffer;
+  return `${salt}:${hash.toString('hex')}`;
+}
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const derived = await scryptAsync(password, salt, 64) as Buffer;
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), derived);
+}
+
 console.log("Starting server process...");
 
 async function startServer() {
@@ -16,8 +30,8 @@ async function startServer() {
     const app = express();
     const PORT = parseInt(process.env.PORT || "8080");
 
-    app.use(express.json({ limit: '50mb' }));
-    app.use(express.urlencoded({ limit: '50mb', extended: true }));
+    app.use(express.json({ limit: '2mb' }));
+    app.use(express.urlencoded({ limit: '2mb', extended: true }));
 
     // Rate limiting keyed by userId + provider + endpoint so each AI provider has its own bucket
     const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -125,6 +139,8 @@ async function startServer() {
       }
     });
 
+  const MAX_BODY_TEXT = 20000; // chars — prevents memory spike on 512MB Render
+
   app.post("/api/ai/insights", rateLimit(20, 60000), async (req, res) => {
     const { provider, stats, pages, keys } = req.body;
     try {
@@ -138,6 +154,8 @@ async function startServer() {
 
   app.post("/api/ai/chat", rateLimit(30, 60000), async (req, res) => {
     const { provider, query, pages, keys } = req.body;
+    if (typeof query === 'string' && query.length > MAX_BODY_TEXT)
+      return res.status(400).json({ error: 'Query too long.' });
     try {
       const result = await ai.chat(provider, query, pages, keys || {});
       res.json({ response: result.response, sources: result.sources });
@@ -149,6 +167,8 @@ async function startServer() {
 
   app.post("/api/ai/geo", rateLimit(20, 60000), async (req, res) => {
     const { provider, query, pages, keys } = req.body;
+    if (typeof query === 'string' && query.length > MAX_BODY_TEXT)
+      return res.status(400).json({ error: 'Query too long.' });
     try {
       const response = await ai.geoAudit(provider, query, pages, keys || {});
       res.json({ response });
@@ -160,8 +180,9 @@ async function startServer() {
 
   app.post("/api/ai/check-plagiarism", rateLimit(10, 60000), async (req, res) => {
     const { provider, url, title, description, bodyText, keys } = req.body;
+    const truncatedBody = typeof bodyText === 'string' ? bodyText.slice(0, MAX_BODY_TEXT) : '';
     try {
-      const result = await ai.checkPagePlagiarism(provider, url, title, description, bodyText || "", keys || {});
+      const result = await ai.checkPagePlagiarism(provider, url, title, description, truncatedBody, keys || {});
       res.json(JSON.parse(result));
     } catch (error: any) {
       console.error("AI Plagiarism Check Error:", error);
@@ -171,8 +192,9 @@ async function startServer() {
 
   app.post("/api/ai/enterprise-audit", rateLimit(10, 60000), async (req, res) => {
     const { provider, url, title, description, bodyText, keys } = req.body;
+    const truncatedBody = typeof bodyText === 'string' ? bodyText.slice(0, MAX_BODY_TEXT) : '';
     try {
-      const result = await ai.checkEnterpriseAudit(provider, url, title, description, bodyText || "", keys || {});
+      const result = await ai.checkEnterpriseAudit(provider, url, title, description, truncatedBody, keys || {});
       res.json(JSON.parse(result));
     } catch (error: any) {
       console.error("AI Enterprise Audit Error:", error);
@@ -475,7 +497,7 @@ async function startServer() {
         return res.status(400).json({ error: "Email already registered" });
       }
       const userId = "usr_" + Math.random().toString(36).substring(2, 11);
-      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+      const passwordHash = await hashPassword(password);
       await db.createUser(userId, email, passwordHash, "Free");
       const user = await db.getUser(userId);
       res.json({ success: true, userId, email, plan: user.plan, credits: user.credits });
@@ -492,8 +514,8 @@ async function startServer() {
     }
     try {
       const user = await db.getUserByEmail(email);
-      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-      if (!user || user.password !== passwordHash) {
+      const valid = user ? await verifyPassword(password, user.password) : false;
+      if (!user || !valid) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
       res.json({ success: true, userId: user.id, email: user.email, plan: user.plan, credits: user.credits });
@@ -537,6 +559,16 @@ async function startServer() {
     force = force === true || force === "true";
     if (!url) return res.status(400).json({ error: "URL is required" });
 
+    // SSRF protection — block private/loopback IPs
+    try {
+      const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+      const host = parsed.hostname;
+      const privatePattern = /^(localhost|127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|::1|0\.0\.0\.0|169\.254\.)/;
+      if (privatePattern.test(host)) return res.status(400).json({ error: "Auditing private/internal addresses is not allowed." });
+    } catch {
+      return res.status(400).json({ error: "Invalid URL format." });
+    }
+
     try {
       maxPages = Math.min(1000, maxPages);
       depth = Math.min(10, depth);
@@ -559,12 +591,12 @@ async function startServer() {
       if (resumeState) {
         // Resume interrupted crawl
         console.log(`Resuming crawl for ${userId} at progress ${status.progress}`);
-        crawler.audit(url, { depth, maxPages, userId, quick, resumeState }).catch(console.error);
+        crawler.auditQueued(url, { depth, maxPages, userId, quick, resumeState });
         res.json({ message: "Audit resumed", url, resumed: true, progress: status.progress });
       } else {
         // Fresh crawl
-        db.resetData(userId).catch(() => {});
-        crawler.audit(url, { depth, maxPages, userId, quick }).catch(console.error);
+        db.resetData(userId).catch((e) => console.error('resetData failed:', e));
+        crawler.auditQueued(url, { depth, maxPages, userId, quick });
         res.json({ message: "Audit started", url });
       }
     } catch (err: any) {
@@ -708,14 +740,7 @@ async function startServer() {
     console.log(`[READY] GEO Audit Agent Server listening on http://0.0.0.0:${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-    // Self-keepalive ping every 10 minutes
-    const baseUrl = `http://localhost:${PORT}`;
-    setInterval(async () => {
-      try {
-        const resp = await fetch(`${baseUrl}/api/health`);
-        console.log(`[Keepalive] pinged self: ${resp.status}`);
-      } catch { /* ignore */ }
-    }, 10 * 60 * 1000);
+
   });
   } catch (error) {
     console.error("FATAL: Failed to start server:", error);

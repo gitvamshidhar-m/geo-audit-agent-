@@ -8,6 +8,26 @@ chromium.use(StealthPlugin());
 
 const isRender = !!(process.env.RENDER || process.env.NODE_ENV === 'production');
 
+// Per-user audit queue — prevents concurrent SQLite writes from the same user
+const auditQueue = new Map<string, Promise<void>>();
+export function auditQueued(startUrl: string, config: AuditConfig) {
+  const userId = config.userId || 'public';
+  const prev = auditQueue.get(userId) || Promise.resolve();
+  const next = prev.then(() => audit(startUrl, config)).catch(() => {});
+  auditQueue.set(userId, next);
+  next.finally(() => { if (auditQueue.get(userId) === next) auditQueue.delete(userId); });
+  return next;
+}
+
+// ScraperAPI domain block cache — only fire ScraperAPI for domains confirmed blocked by fetch
+const scraperDomains = new Set<string>();
+const fetchFailCounts = new Map<string, number>();
+
+// Cap module-level Maps/Sets to prevent unbounded memory growth on long-running instances
+const MAP_CAP = 500;
+function capMap<K, V>(m: Map<K, V>) { if (m.size > MAP_CAP) m.delete(m.keys().next().value); }
+function capSet<V>(s: Set<V>) { if (s.size > MAP_CAP) s.delete(s.values().next().value); }
+
 const userAgents = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -33,6 +53,7 @@ function getDomain(url: string): string {
 function getProfile(url: string): DomainProfile {
   const domain = getDomain(url);
   if (!domainProfiles.has(domain)) {
+    capMap(domainProfiles);
     domainProfiles.set(domain, { fetchSuccess: 0, playwrightNeeded: 0, blocked: 0, avgFetchMs: 0, strategy: 'fetch', bestHeaderSet: 0 });
   }
   return domainProfiles.get(domain)!;
@@ -66,6 +87,7 @@ function storeCookies(url: string, setCookieHeader: string | null) {
   const domain = getDomain(url);
   const existing = cookieJar.get(domain) || '';
   const newCookies = setCookieHeader.split(',').map(c => c.split(';')[0].trim()).filter(Boolean).join('; ');
+  capMap(cookieJar);
   cookieJar.set(domain, existing ? `${existing}; ${newCookies}` : newCookies);
 }
 
@@ -225,6 +247,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
   const MAX_PLAYWRIGHTS = isRender ? 1 : 3;
   const BROWSER_IDLE_MS = isRender ? 8000 : 15000;
+  const SCRAPER_TIMEOUT_MS = isRender ? 20000 : 30000;
 
   let processedCount = 0;
   let startedCount = 0;
@@ -344,12 +367,21 @@ export async function audit(startUrl: string, config: AuditConfig) {
       }
 
       // Tier 2: ScraperAPI — only triggered when fetch is blocked/failed
-      // Consumes API credits only for bot-protected sites
+      // Only fires for domains confirmed blocked (2+ fetch failures) to conserve credits
       if (!htmlContent && process.env.SCRAPER_API_KEY) {
+        const domain = getDomain(url);
+        if (!scraperDomains.has(domain)) {
+          const fails = (fetchFailCounts.get(domain) || 0) + 1;
+          capMap(fetchFailCounts);
+          fetchFailCounts.set(domain, fails);
+          if (fails >= 2) { capSet(scraperDomains); scraperDomains.add(domain); }
+        }
+      }
+      if (!htmlContent && process.env.SCRAPER_API_KEY && scraperDomains.has(getDomain(url))) {
         try {
           const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true`;
           const ac = new AbortController();
-          const t = setTimeout(() => ac.abort(), 30000);
+          const t = setTimeout(() => ac.abort(), SCRAPER_TIMEOUT_MS);
           const scraperRes = await fetch(scraperUrl, { signal: ac.signal }).catch(() => null);
           clearTimeout(t);
           if (scraperRes?.ok) {
@@ -656,8 +688,8 @@ try {
   }
 
   const runWorker = async () => {
-    const idleDelay = quick ? 10 : 100;
-    const loopDelay = quick ? 5 : 50;
+    const idleDelay = quick ? 20 : 200;
+    const loopDelay = quick ? 10 : 100;
     while (startedCount < maxPages) {
       const task = queue.shift();
       if (!task) {
@@ -685,7 +717,7 @@ try {
   };
 
   try {
-    const workerCount = isRender ? (quick ? 20 : 12) : (quick ? 40 : 20);
+    const workerCount = isRender ? (quick ? 10 : 5) : (quick ? 40 : 20);
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.race([
       Promise.all(workers),
@@ -708,13 +740,16 @@ try {
       }
       const uniqueLinks = [...linkToPages.keys()];
       const brokenLinks: string[] = [];
-      const concurrency = isRender ? 5 : 15; // Reduce concurrent HEAD requests on free tier
-      for (let i = 0; i < uniqueLinks.length; i += concurrency) {
-        const batch = uniqueLinks.slice(i, i + concurrency);
+      const concurrency = isRender ? 3 : 15; // Reduce concurrent HEAD requests on free tier
+      const linkCheckTimeout = isRender ? 1500 : 2000;
+      // Cap total links checked on Render to avoid post-crawl OOM
+      const linksToCheck = isRender ? uniqueLinks.slice(0, 500) : uniqueLinks;
+      for (let i = 0; i < linksToCheck.length; i += concurrency) {
+        const batch = linksToCheck.slice(i, i + concurrency);
         const results = await Promise.allSettled(
           batch.map(async (url) => {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 2000);
+            const timer = setTimeout(() => controller.abort(), linkCheckTimeout);
             try {
               const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: headerSets[0] });
               if (res.status >= 400) throw new Error(`${res.status}`);

@@ -1,6 +1,8 @@
 import * as cheerio from "cheerio";
 import { SEOPage, SEOIssue } from "../types/seo.js";
 
+type SEOImage = { src: string; alt: string; isMissingAlt: boolean; altQuality: 'good' | 'generic' | 'missing' };
+
 export function quickAnalyzeHTML(url: string, html: string, loadTime: number, headers?: Record<string, string>): SEOPage {
   const lc = html.toLowerCase();
   const titleIdx = lc.indexOf("<title");

@@ -52,8 +52,7 @@ import {
   ShieldAlert,
   TrendingUp,
   Sun,
-  Moon,
-  Monitor
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 interface SaaSUser {
@@ -128,7 +127,7 @@ const getJitteredScore = (url: string, baseScore: number, index: number) => {
 
 export default function App() {
   console.log("App component rendering...");
-  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare' | 'competitors'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare' | 'competitors' | 'crux'>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(1000);
@@ -327,6 +326,12 @@ export default function App() {
       console.warn("localStorage is not available in this environment.");
     }
   }, [apiKeys]);
+
+  // Keepalive ping — prevents Render free tier from spinning down during active sessions
+  useEffect(() => {
+    const id = setInterval(() => fetch('/api/health').catch(() => {}), 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Load comparisons from localStorage on mount
   useEffect(() => {
