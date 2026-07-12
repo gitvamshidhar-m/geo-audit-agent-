@@ -309,10 +309,10 @@ export async function audit(startUrl: string, config: AuditConfig) {
       visited.add(finalUrlKey);
       visited.add(finalUrlKey.replace(/^https?:\/\/(www\.)?/, ""));
       visited.add(cacheKey);
-      return;
     }
 
-    try {
+    if (!htmlContent) {
+      try {
       // Try fetch first (Fast) with AbortController timeout
       // Use adaptive header set based on domain profile, rotate on failure
       try {
@@ -608,7 +608,7 @@ try {
     } catch (e: any) {
       console.error(`Outer crawl logic failed for ${url}:`, e.message);
       lastErrorMessage = e.message || "Unknown crawl error";
-    }
+    } }
 
     // ALWAYS increment and save result (success or failure) to avoid UI getting stuck
     processedCount++;
