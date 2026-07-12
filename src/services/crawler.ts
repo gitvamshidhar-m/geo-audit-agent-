@@ -19,13 +19,10 @@ export function auditQueued(startUrl: string, config: AuditConfig) {
   return next;
 }
 
-// ScraperAPI domain block cache — only fire ScraperAPI for domains confirmed blocked by fetch
+// ScraperAPI domain cache — activates on first fetch failure per domain
 const scraperDomains = new Set<string>();
-const fetchFailCounts = new Map<string, number>();
 
-// Cap module-level Maps/Sets to prevent unbounded memory growth on long-running instances
 const MAP_CAP = 500;
-function capMap<K, V>(m: Map<K, V>) { if (m.size > MAP_CAP) m.delete(m.keys().next().value); }
 function capSet<V>(s: Set<V>) { if (s.size > MAP_CAP) s.delete(s.values().next().value); }
 
 const userAgents = [
@@ -356,6 +353,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
           } else if (looksLikeABlock) {
             lastErrorMessage = "Fetch returned Cloudflare or Bot Challenge block page";
             // Don't break — try next header set (Googlebot/Bingbot often bypasses)
+          } else if (response.status === 403 || response.status === 429) {
+            lastErrorMessage = `HTTP ${response.status} - Access blocked by website`;
           }
         }
 
@@ -391,6 +390,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
               updateProfile(url, 'fetch', 0, 0);
               db.updateStatus(userId, true, progress, `ScraperAPI bypass: ${url}`).catch(() => {});
             }
+          } else if (scraperRes) {
+            console.error(`ScraperAPI returned ${scraperRes.status} for ${url}`);
           }
         } catch (e: any) {
           console.error(`ScraperAPI failed for ${url}:`, e.message);
@@ -714,7 +715,7 @@ try {
   };
 
   try {
-    const workerCount = isRender ? (quick ? 10 : 5) : (quick ? 40 : 20);
+    const workerCount = isRender ? (quick ? 20 : 10) : (quick ? 40 : 20);
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.race([
       Promise.all(workers),
