@@ -25,6 +25,12 @@ const scraperDomains = new Set<string>();
 const MAP_CAP = 500;
 function capSet<V>(s: Set<V>) { if (s.size > MAP_CAP) s.delete(s.values().next().value); }
 
+// In-memory cache: avoids re-fetching same URLs across audits
+const urlCache = new Map<string, { html: string; finalUrl: string; headers: Record<string, string>; loadTime: number; time: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+function cacheGet(key: string) { const v = urlCache.get(key); if (v && Date.now() - v.time < CACHE_TTL_MS) return v; urlCache.delete(key); return null; }
+function cacheSet(key: string, val: { html: string; finalUrl: string; headers: Record<string, string>; loadTime: number }) { if (urlCache.size >= MAP_CAP) { const first = urlCache.keys().next().value; urlCache.delete(first); } urlCache.set(key, { ...val, time: Date.now() }); }
+
 const userAgents = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -244,7 +250,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
   const MAX_PLAYWRIGHTS = isRender ? 1 : 3;
   const BROWSER_IDLE_MS = isRender ? 8000 : 15000;
-  const SCRAPER_TIMEOUT_MS = isRender ? 20000 : 30000;
+  const SCRAPER_TIMEOUT_MS = isRender ? 15000 : 25000;
 
   let processedCount = 0;
   let startedCount = 0;
@@ -290,6 +296,21 @@ export async function audit(startUrl: string, config: AuditConfig) {
     let headersMap: Record<string, string> = {};
     let lastErrorMessage = "";
     let pageLoadTime = 0;
+
+    // Check in-memory cache before fetching
+    const cacheKey = url.replace(/\/$/, "").toLowerCase();
+    const cached = cacheGet(cacheKey);
+    if (cached) {
+      htmlContent = cached.html;
+      finalUrl = cached.finalUrl;
+      headersMap = cached.headers;
+      pageLoadTime = cached.loadTime;
+      const finalUrlKey = finalUrl.replace(/\/$/, "").toLowerCase();
+      visited.add(finalUrlKey);
+      visited.add(finalUrlKey.replace(/^https?:\/\/(www\.)?/, ""));
+      visited.add(cacheKey);
+      return;
+    }
 
     try {
       // Try fetch first (Fast) with AbortController timeout
@@ -350,6 +371,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
             visited.add(url.replace(/\/$/, "").toLowerCase());
             updateProfile(url, 'fetch', pageLoadTime, usedHeaderIdx);
             fetchOk = true;
+            cacheSet(cacheKey, { html: text, finalUrl, headers: headersMap, loadTime: pageLoadTime });
           } else if (looksLikeABlock) {
             lastErrorMessage = "Fetch returned Cloudflare or Bot Challenge block page";
             // Don't break — try next header set (Googlebot/Bingbot often bypasses)
@@ -716,7 +738,7 @@ try {
   };
 
   try {
-    const workerCount = isRender ? (quick ? 20 : 10) : (quick ? 40 : 20);
+    const workerCount = isRender ? (quick ? 12 : 8) : (quick ? 40 : 20);
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.race([
       Promise.all(workers),
@@ -727,53 +749,7 @@ try {
   } finally {
     await flushPages();
 
-    // Link health check — check internal links for broken/404
-    try {
-      const pages = await db.getPages(userId);
-      const linkToPages = new Map<string, Set<string>>();
-      for (const page of pages) {
-        for (const link of (page.links?.internal || [])) {
-          if (!linkToPages.has(link)) linkToPages.set(link, new Set());
-          linkToPages.get(link)!.add(page.url);
-        }
-      }
-      const uniqueLinks = [...linkToPages.keys()];
-      const brokenLinks: string[] = [];
-      const concurrency = isRender ? 3 : 15; // Reduce concurrent HEAD requests on free tier
-      const linkCheckTimeout = isRender ? 1500 : 2000;
-      // Cap total links checked on Render to avoid post-crawl OOM
-      const linksToCheck = isRender ? uniqueLinks.slice(0, 500) : uniqueLinks;
-      for (let i = 0; i < linksToCheck.length; i += concurrency) {
-        const batch = linksToCheck.slice(i, i + concurrency);
-        const results = await Promise.allSettled(
-          batch.map(async (url) => {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), linkCheckTimeout);
-            try {
-              const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: headerSets[0] });
-              if (res.status >= 400) throw new Error(`${res.status}`);
-            } finally { clearTimeout(timer); }
-          })
-        );
-        results.forEach((r, idx) => {
-          if (r.status === "rejected") brokenLinks.push(batch[idx]);
-        });
-      }
-      if (brokenLinks.length > 0) {
-        for (const page of pages) {
-          const brokenOnPage = (page.links?.internal || []).filter((l: string) => brokenLinks.includes(l));
-          if (brokenOnPage.length > 0) {
-            (page.issues || []).push({
-              type: "warning",
-              message: `${brokenOnPage.length} broken internal link(s) detected: ${brokenOnPage.slice(0, 3).join(", ")}${brokenOnPage.length > 3 ? ` +${brokenOnPage.length - 3} more` : ""}`,
-              category: "technical",
-            });
-          }
-        }
-        await db.savePagesBatch(userId, pages);
-      }
-    } catch (e) { console.error("Link health check failed:", e); }
-
+    // Mark completed immediately so results are available
     if (browser) await browser.close().catch(() => {});
     if (sharedContext) await sharedContext.close().catch(() => {});
     await db.updateStatus(userId, false, 100, "Completed");
@@ -784,5 +760,53 @@ try {
       const stats = await db.getStats(userId);
       await db.saveAuditHistory(userId, startUrl, stats, pages.length);
     } catch (e) { console.error("Failed to save audit history:", e); }
+
+    // Link health check — run async, don't block completion
+    (async () => {
+      try {
+        const pages = await db.getPages(userId);
+        const linkToPages = new Map<string, Set<string>>();
+        for (const page of pages) {
+          for (const link of (page.links?.internal || [])) {
+            if (!linkToPages.has(link)) linkToPages.set(link, new Set());
+            linkToPages.get(link)!.add(page.url);
+          }
+        }
+        const uniqueLinks = [...linkToPages.keys()];
+        const brokenLinks: string[] = [];
+        const concurrency = isRender ? 3 : 15;
+        const linkCheckTimeout = isRender ? 1500 : 2000;
+        const linksToCheck = isRender ? uniqueLinks.slice(0, 500) : uniqueLinks;
+        for (let i = 0; i < linksToCheck.length; i += concurrency) {
+          const batch = linksToCheck.slice(i, i + concurrency);
+          const results = await Promise.allSettled(
+            batch.map(async (url) => {
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), linkCheckTimeout);
+              try {
+                const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: headerSets[0] });
+                if (res.status >= 400) throw new Error(`${res.status}`);
+              } finally { clearTimeout(timer); }
+            })
+          );
+          results.forEach((r, idx) => {
+            if (r.status === "rejected") brokenLinks.push(batch[idx]);
+          });
+        }
+        if (brokenLinks.length > 0) {
+          for (const page of pages) {
+            const brokenOnPage = (page.links?.internal || []).filter((l: string) => brokenLinks.includes(l));
+            if (brokenOnPage.length > 0) {
+              (page.issues || []).push({
+                type: "warning",
+                message: `${brokenOnPage.length} broken internal link(s) detected: ${brokenOnPage.slice(0, 3).join(", ")}${brokenOnPage.length > 3 ? ` +${brokenOnPage.length - 3} more` : ""}`,
+                category: "technical",
+              });
+            }
+          }
+          await db.savePagesBatch(userId, pages);
+        }
+      } catch (e) { console.error("Link health check failed:", e); }
+    })();
   }
 }
