@@ -2,9 +2,11 @@ import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import fetch from "node-fetch";
 import { analyzeHTML, quickAnalyzeHTML } from "./analyzer.js";
-
 import * as db from "./storage.js";
+
 chromium.use(StealthPlugin());
+
+const isRender = !!(process.env.RENDER || process.env.NODE_ENV === 'production');
 
 const userAgents = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -12,11 +14,73 @@ const userAgents = [
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
 ];
 
-const fetchHeaders = {
-  "User-Agent": userAgents[0],
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-};
+// ── Adaptive Domain Intelligence ──────────────────────────────────────────────
+// Learns per-domain crawl strategy at runtime so subpages reuse what worked
+interface DomainProfile {
+  fetchSuccess: number;
+  playwrightNeeded: number;
+  blocked: number;
+  avgFetchMs: number;
+  strategy: 'fetch' | 'playwright' | 'blocked';
+  bestHeaderSet: number;
+}
+const domainProfiles = new Map<string, DomainProfile>();
+
+function getDomain(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+function getProfile(url: string): DomainProfile {
+  const domain = getDomain(url);
+  if (!domainProfiles.has(domain)) {
+    domainProfiles.set(domain, { fetchSuccess: 0, playwrightNeeded: 0, blocked: 0, avgFetchMs: 0, strategy: 'fetch', bestHeaderSet: 0 });
+  }
+  return domainProfiles.get(domain)!;
+}
+
+function updateProfile(url: string, result: 'fetch' | 'playwright' | 'blocked', fetchMs = 0, headerSetIdx = 0) {
+  const p = getProfile(url);
+  if (result === 'fetch') {
+    p.fetchSuccess++;
+    p.avgFetchMs = p.avgFetchMs === 0 ? fetchMs : (p.avgFetchMs * 0.8 + fetchMs * 0.2);
+    p.bestHeaderSet = headerSetIdx;
+  } else if (result === 'playwright') {
+    p.playwrightNeeded++;
+  } else {
+    p.blocked++;
+  }
+  // Adapt strategy after 3+ samples
+  const total = p.fetchSuccess + p.playwrightNeeded + p.blocked;
+  if (total >= 3) {
+    if (p.blocked / total > 0.6) p.strategy = 'blocked';
+    else if (p.playwrightNeeded / total > 0.4) p.strategy = 'playwright';
+    else p.strategy = 'fetch';
+  }
+}
+
+// ── Header rotation: Chrome, Mac Chrome, Googlebot (many sites whitelist it) ──
+const headerSets = [
+  {
+    "User-Agent": userAgents[0],
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "no-cache",
+  },
+  {
+    "User-Agent": userAgents[1],
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-GB,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+  },
+  {
+    "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+  },
+];
+
+const fetchHeaders = headerSets[0];
 
 interface AuditConfig {
   depth: number;
@@ -143,9 +207,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
   // Don't await sitemapPromise — crawl starts immediately
 
-  const isRender = !!(process.env.RENDER || process.env.NODE_ENV === 'production');
-  const MAX_PLAYWRIGHTS = isRender ? 1 : 3; // Only 1 Chromium tab at a time on free tier
-  const BROWSER_IDLE_MS = isRender ? 8000 : 15000; // Close browser faster on Render
+  const MAX_PLAYWRIGHTS = isRender ? 1 : 3;
+  const BROWSER_IDLE_MS = isRender ? 8000 : 15000;
 
   let processedCount = 0;
   let startedCount = 0;

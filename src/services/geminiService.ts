@@ -43,7 +43,7 @@ export async function generateSEOInsights(stats: AuditStats, pages: SEOPage[]) {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: prompt,
       config: {
         systemInstruction: "You are an expert SEO Strategist at a top digital agency. You provide high-impact, data-driven SEO advice."
@@ -74,7 +74,7 @@ export async function chatAboutSEO(query: string, context: SEOPage[]) {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: prompt,
     });
 

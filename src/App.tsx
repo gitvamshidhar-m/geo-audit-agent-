@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { generateGeminiInsights, chatWithGemini } from './services/clientAiService';
 import { 
   ChartBar, 
   Search, 
@@ -271,7 +270,7 @@ export default function App() {
   const [pageSearch, setPageSearch] = useState('');
   const [compareUrls, setCompareUrls] = useState<string[]>([]);
   const [isComparing, setIsComparing] = useState(false);
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'openai' | 'anthropic' | 'groq' | 'huggingface' | 'deepseek' | 'perplexity'>('gemini');
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'openai' | 'anthropic' | 'groq' | 'huggingface' | 'deepseek' | 'perplexity'>('groq');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [currentUser] = useState<SaaSUser>(() => {
@@ -585,41 +584,24 @@ export default function App() {
       const optimizedPages = optimizePagesForAI(currentPages);
       let insightRaw = "";
 
-      if (aiProvider === 'gemini') {
-        // Direct client-side call for Gemini as per guidelines
-        setAgentProgress("Initializing CrewAI Multi-Agent Engine...");
-        insightRaw = await generateGeminiInsights(
-          currentStats, 
-          optimizedPages, 
-          apiKeys.gemini,
-          (msg) => setAgentProgress(msg)
-        );
-      } else {
-        const gKeyRaw = apiKeys.gemini || '';
-        const effectiveKeys = {
-          ...apiKeys,
-          gemini: (gKeyRaw === 'MY_GEMINI_API_KEY' || gKeyRaw === 'YOUR_GEMINI_API_KEY' ? process.env.GEMINI_API_KEY : gKeyRaw) || process.env.GEMINI_API_KEY || ''
-        };
-
-        const res = await apiFetch('/api/ai/insights', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            provider: aiProvider, 
-            stats: currentStats, 
-            pages: optimizedPages,
-            keys: effectiveKeys
-          })
-        });
-        
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || `Server error: ${res.status}`);
-        }
-
-        const data = await res.json();
-        insightRaw = data.insight;
+      const res = await apiFetch('/api/ai/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          provider: aiProvider, 
+          stats: currentStats, 
+          pages: optimizedPages,
+          keys: apiKeys
+        })
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${res.status}`);
       }
+
+      const data = await res.json();
+      insightRaw = data.insight;
 
       try {
         const cleaned = insightRaw.replace(/```json\n?|\n?```/g, "").trim();

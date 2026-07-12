@@ -85,13 +85,7 @@ export async function initDB() {
     );
   `);
 
-  // Seed default admin account
-  try {
-    db.prepare("INSERT OR IGNORE INTO users (id, email, password, plan, credits) VALUES (?, ?, ?, ?, ?)")
-      .run("admin", "admin@saas.com", "password123", "Pro", 500);
-  } catch (err) {
-    console.warn("Could not seed default user:", err);
-  }
+  // No default seeded accounts - users must register
 }
 
 export async function createUser(id: string, email: string, passwordHash: string, plan: string = "Free") {

@@ -1,4 +1,5 @@
 import fs from "fs";
+import crypto from "crypto";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -15,6 +16,37 @@ async function startServer() {
 
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+    // Rate limiting keyed by userId + provider + endpoint so each AI provider has its own bucket
+    const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+    // Cleanup stale entries every 5 minutes to prevent memory leak on long-running Render instances
+    setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of rateLimitMap) {
+        if (now > entry.resetAt) rateLimitMap.delete(key);
+      }
+    }, 5 * 60 * 1000);
+    // Per-provider limits (requests per minute) — generous for fast providers, conservative for slow ones
+    const providerLimits: Record<string, number> = {
+      groq: 30, openai: 20, anthropic: 15, gemini: 15,
+      deepseek: 20, perplexity: 15, huggingface: 5
+    };
+    const rateLimit = (defaultMax: number, windowMs: number) => (req: any, res: any, next: any) => {
+      const userId = (req.headers['x-user-id'] as string) || req.ip || 'unknown';
+      const provider = req.body?.provider || 'unknown';
+      const endpoint = req.path;
+      const key = `${userId}:${provider}:${endpoint}`;
+      const maxReqs = providerLimits[provider] ?? defaultMax;
+      const now = Date.now();
+      const entry = rateLimitMap.get(key);
+      if (!entry || now > entry.resetAt) {
+        rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+        return next();
+      }
+      if (entry.count >= maxReqs) return res.status(429).json({ error: `Rate limit reached for ${provider}. Please wait a moment.` });
+      entry.count++;
+      next();
+    };
 
     app.use((req, res, next) => {
       next();
@@ -91,7 +123,7 @@ async function startServer() {
       }
     });
 
-  app.post("/api/ai/insights", async (req, res) => {
+  app.post("/api/ai/insights", rateLimit(20, 60000), async (req, res) => {
     const { provider, stats, pages, keys } = req.body;
     try {
       const insight = await ai.generateInsights(provider, stats, pages, keys || {});
@@ -102,7 +134,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/ai/chat", async (req, res) => {
+  app.post("/api/ai/chat", rateLimit(30, 60000), async (req, res) => {
     const { provider, query, pages, keys } = req.body;
     try {
       const result = await ai.chat(provider, query, pages, keys || {});
@@ -113,7 +145,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/ai/geo", async (req, res) => {
+  app.post("/api/ai/geo", rateLimit(20, 60000), async (req, res) => {
     const { provider, query, pages, keys } = req.body;
     try {
       const response = await ai.geoAudit(provider, query, pages, keys || {});
@@ -124,7 +156,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/ai/check-plagiarism", async (req, res) => {
+  app.post("/api/ai/check-plagiarism", rateLimit(10, 60000), async (req, res) => {
     const { provider, url, title, description, bodyText, keys } = req.body;
     try {
       const result = await ai.checkPagePlagiarism(provider, url, title, description, bodyText || "", keys || {});
@@ -135,7 +167,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/ai/enterprise-audit", async (req, res) => {
+  app.post("/api/ai/enterprise-audit", rateLimit(10, 60000), async (req, res) => {
     const { provider, url, title, description, bodyText, keys } = req.body;
     try {
       const result = await ai.checkEnterpriseAudit(provider, url, title, description, bodyText || "", keys || {});
@@ -441,7 +473,8 @@ async function startServer() {
         return res.status(400).json({ error: "Email already registered" });
       }
       const userId = "usr_" + Math.random().toString(36).substring(2, 11);
-      await db.createUser(userId, email, password, "Free");
+      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+      await db.createUser(userId, email, passwordHash, "Free");
       const user = await db.getUser(userId);
       res.json({ success: true, userId, email, plan: user.plan, credits: user.credits });
     } catch (err: any) {
@@ -457,7 +490,8 @@ async function startServer() {
     }
     try {
       const user = await db.getUserByEmail(email);
-      if (!user || user.password !== password) {
+      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+      if (!user || user.password !== passwordHash) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
       res.json({ success: true, userId: user.id, email: user.email, plan: user.plan, credits: user.credits });

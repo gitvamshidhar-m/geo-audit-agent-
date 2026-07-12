@@ -1,4 +1,4 @@
-﻿import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { SEOPage, AuditStats } from "../types/seo.js";
 
 import { CrewAIEngine, CrewAgent, CrewTask } from "./crewAIEngine.js";
@@ -174,7 +174,7 @@ export async function chatWithGemini(query: string, pages: any[], userApiKey?: s
 
   const textResponse = await retry(async () => {
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: prompt,
       config: {
           systemInstruction: system

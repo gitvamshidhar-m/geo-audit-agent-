@@ -1,4 +1,4 @@
-﻿import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import Groq from "groq-sdk";
@@ -301,7 +301,7 @@ export async function generateInsights(provider: AIProvider, stats: AuditStats, 
     case 'gemini': {
       const ai = getGemini(keys.gemini);
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: prompt,
         config: {
             systemInstruction: SYSTEM_PROMPT + " Respond ONLY with JSON.",
@@ -380,7 +380,7 @@ export async function geoAudit(provider: AIProvider, query: string, pages: SEOPa
     case 'gemini': {
       const ai = getGemini(keys.gemini);
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: query,
         config: {
             systemInstruction: jsonSystemPrompt,
@@ -465,7 +465,7 @@ export async function chat(provider: AIProvider, query: string, pages: SEOPage[]
     case 'gemini': {
       const ai = getGemini(keys.gemini);
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: prompt,
         config: {
             systemInstruction: SYSTEM_PROMPT
@@ -593,7 +593,7 @@ You MUST output only raw JSON matching this structure. Do not wrap in markdown o
     case 'gemini': {
       const ai = getGemini(keys.gemini);
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: prompt,
         config: {
           systemInstruction: "You are an expert AI plagiarism detector, linguistic auditor, and Generative Engine Optimization analyst. Analyze content authenticity, quality risks, tone profile, and return EXCLUSIVELY a JSON object matching the requested schema.",
@@ -809,7 +809,7 @@ You MUST output only raw JSON matching this structure. Do not wrap in markdown o
     case 'gemini': {
       const ai = getGemini(keys.gemini);
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: prompt,
         config: {
           systemInstruction: "You are an elite Enterprise Generative AI Architect and DevSecOps Director. Analyze theoretical and actual application profiles, returning EXCLUSIVELY a JSON object matching the requested schema.",
