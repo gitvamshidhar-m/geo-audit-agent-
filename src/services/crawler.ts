@@ -343,7 +343,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           // Store cookies for future requests to this domain
             storeCookies(url, response.headers.get('set-cookie'));
 
-          if (quick || (text.length > 50 && !looksLikeABlock)) {
+          if ((quick && response.status < 400) || (text.length > 50 && !looksLikeABlock)) {
             htmlContent = text;
             headersMap["x-actual-status"] = response.status.toString();
             response.headers.forEach((v: string, k: string) => { headersMap[k] = v; });
