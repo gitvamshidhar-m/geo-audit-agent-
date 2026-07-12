@@ -304,7 +304,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           usedHeaderIdx = (startHeaderIdx + attempt) % headerSets.length;
           const fetchStart = Date.now();
           const ac3 = new AbortController();
-          const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 7000);
+          const t3 = setTimeout(() => ac3.abort(), quick ? 5000 : 7000);
           let response: any = null;
           try {
             const cookies = getCookieHeader(url);
