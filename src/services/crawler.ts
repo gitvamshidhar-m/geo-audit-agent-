@@ -143,6 +143,10 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
   // Don't await sitemapPromise — crawl starts immediately
 
+  const isRender = !!(process.env.RENDER || process.env.NODE_ENV === 'production');
+  const MAX_PLAYWRIGHTS = isRender ? 1 : 3; // Only 1 Chromium tab at a time on free tier
+  const BROWSER_IDLE_MS = isRender ? 8000 : 15000; // Close browser faster on Render
+
   let processedCount = 0;
   let startedCount = 0;
   let activeWorkers = 0;
@@ -154,7 +158,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
   let flushScheduled = false;
 
   async function closeBrowserIfIdle() {
-    if (browser && browserLastUsed > 0 && Date.now() - browserLastUsed > 15000 && activePlaywrights === 0) {
+    if (browser && browserLastUsed > 0 && Date.now() - browserLastUsed > BROWSER_IDLE_MS && activePlaywrights === 0) {
       try { await browser.close().catch(() => {}); } catch {}
       if (sharedContext) { try { await sharedContext.close().catch(() => {}); } catch {} }
       browser = null;
@@ -256,7 +260,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           if (!htmlContent) htmlContent = "";
         } else {
           // Wait if too many Playwright instances are running to prevent memory crashes
-          while (activePlaywrights >= (quick ? 20 : 12)) {
+          while (activePlaywrights >= MAX_PLAYWRIGHTS) {
             await new Promise((r) => setTimeout(r, 50));
           }
           activePlaywrights++;
@@ -269,41 +273,24 @@ export async function audit(startUrl: string, config: AuditConfig) {
               if (!browser) {
                 isLaunchingBrowser = true;
                 try {
-                  browser = await chromium.launch({
-                    headless: true,
-                    args: [
-                      "--no-sandbox",
-                      "--disable-setuid-sandbox",
-                      "--disable-dev-shm-usage",
-                      "--single-process",
-                      "--disable-web-security",
-                      "--disable-features=IsolateOrigins,site-per-process",
-                      "--disable-blink-features=AutomationControlled",
-                    ],
-                  });
+                  const chromiumArgs = [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--single-process",
+                    "--disable-web-security",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--disable-blink-features=AutomationControlled",
+                    ...(isRender ? [
+                      "--disable-gpu",
+                      "--no-zygote",
+                      "--memory-pressure-off",
+                      "--js-flags=--max-old-space-size=128",
+                    ] : [])
+                  ];
+                  browser = await chromium.launch({ headless: true, args: chromiumArgs });
                 } catch (launchErr: any) {
-                  console.error(
-                    "Playwright failed to launch. Attempting automated recovery...",
-                    launchErr.message,
-                  );
-                  try {
-                    const { execSync } = await import("child_process");
-                    execSync("npx playwright install chromium", { stdio: "inherit", timeout: 120000 });
-                    browser = await chromium.launch({
-                      headless: true,
-                      args: [
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--single-process",
-                        "--disable-web-security",
-                        "--disable-features=IsolateOrigins,site-per-process",
-                        "--disable-blink-features=AutomationControlled",
-                      ],
-                    });
-                  } catch (installErr: any) {
-                    console.error("Chromium install failed:", installErr.message);
-                  }
+                  console.error("Playwright failed to launch:", launchErr.message);
                 } finally {
                   isLaunchingBrowser = false;
                 }
@@ -549,7 +536,7 @@ try {
   };
 
   try {
-    const workerCount = quick ? 50 : (process.env.RENDER || process.env.NODE_ENV === 'production' ? 15 : 30);
+    const workerCount = isRender ? (quick ? 8 : 5) : (quick ? 20 : 10);
     const workers = Array.from({ length: workerCount }, () => runWorker());
     await Promise.race([
       Promise.all(workers),
@@ -572,7 +559,7 @@ try {
       }
       const uniqueLinks = [...linkToPages.keys()];
       const brokenLinks: string[] = [];
-      const concurrency = 25;
+      const concurrency = isRender ? 5 : 15; // Reduce concurrent HEAD requests on free tier
       for (let i = 0; i < uniqueLinks.length; i += concurrency) {
         const batch = uniqueLinks.slice(i, i + concurrency);
         const results = await Promise.allSettled(
