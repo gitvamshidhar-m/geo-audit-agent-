@@ -138,7 +138,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
     } catch (e) {
       console.error("Sitemap processing error (non-fatal):", e);
     }
-    db.updateStatus(userId, true, 0, startUrlNormalized, hasRobots, hasSitemap).catch(() => {});
+    const curStatus = await db.getAuditStatus(userId).catch(() => null);
+    db.updateStatus(userId, true, curStatus?.progress || 0, startUrlNormalized, hasRobots, hasSitemap).catch(() => {});
   })();
 
   // Don't await sitemapPromise — crawl starts immediately
@@ -204,7 +205,10 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
         if (response.status) {
           finalUrl = response.url;
-          const text = await response.text();
+          const text = await Promise.race([
+            response.text(),
+            new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Response body read timeout")), quick ? 5000 : 8000))
+          ]);
 
           const lower = text.toLowerCase();
           const looksLikeABlock = !quick && (
@@ -386,7 +390,10 @@ try {
                 }
 
                 finalUrl = page.url();
-                htmlContent = await page.content();
+                htmlContent = await Promise.race([
+                  page.content(),
+                  new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Playwright content timeout")), 5000))
+                ]);
                 headersMap = (await resp?.allHeaders()) || {};
                 if (resp) {
                    headersMap["x-actual-status"] = resp.status().toString();
@@ -545,7 +552,10 @@ try {
   try {
     const workerCount = quick ? 50 : (process.env.RENDER || process.env.NODE_ENV === 'production' ? 15 : 30);
     const workers = Array.from({ length: workerCount }, () => runWorker());
-    await Promise.all(workers);
+    await Promise.race([
+      Promise.all(workers),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Audit exceeded 10 minute timeout")), 600000))
+    ]);
   } catch (error) {
     console.error("Audit error:", error);
   } finally {
