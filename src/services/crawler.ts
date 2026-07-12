@@ -366,15 +366,12 @@ export async function audit(startUrl: string, config: AuditConfig) {
         lastErrorMessage = e.message || "Fetch failed";
       }
 
-      // Tier 2: ScraperAPI — only triggered when fetch is blocked/failed
-      // Only fires for domains confirmed blocked (2+ fetch failures) to conserve credits
+      // Tier 2: ScraperAPI — activates on first fetch failure when key is set
       if (!htmlContent && process.env.SCRAPER_API_KEY) {
         const domain = getDomain(url);
         if (!scraperDomains.has(domain)) {
-          const fails = (fetchFailCounts.get(domain) || 0) + 1;
-          capMap(fetchFailCounts);
-          fetchFailCounts.set(domain, fails);
-          if (fails >= 2) { capSet(scraperDomains); scraperDomains.add(domain); }
+          capSet(scraperDomains);
+          scraperDomains.add(domain);
         }
       }
       if (!htmlContent && process.env.SCRAPER_API_KEY && scraperDomains.has(getDomain(url))) {
