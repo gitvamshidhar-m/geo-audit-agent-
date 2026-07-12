@@ -309,10 +309,12 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
           const lower = text.toLowerCase();
           const looksLikeABlock = !quick && (
-            text.length < 5000 &&
-            (lower.includes("security check") ||
-              lower.includes("cloudflare") ||
-              (lower.includes("captcha") && text.length < 2000))
+            response.status === 403 ||
+            response.status === 429 ||
+            (text.length < 5000 &&
+              (lower.includes("security check") ||
+                lower.includes("cloudflare") ||
+                (lower.includes("captcha") && text.length < 2000)))
           );
 
           // Store cookies for future requests to this domain
