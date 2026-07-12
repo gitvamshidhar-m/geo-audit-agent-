@@ -159,6 +159,11 @@ export async function updateStatus(userId: string, isRunning: boolean, progress:
   }
 }
 
+export async function updateSitemapFlags(userId: string, hasRobots: boolean, hasSitemap: boolean) {
+  db.prepare("UPDATE audit_status SET has_robots = ?, has_sitemap = ?, last_updated = CURRENT_TIMESTAMP WHERE userId = ?")
+    .run(hasRobots ? 1 : 0, hasSitemap ? 1 : 0, userId);
+}
+
 export async function getAuditStatus(userId: string) {
   const status = db.prepare("SELECT * FROM audit_status WHERE userId = ?").get(userId);
   if (!status) {

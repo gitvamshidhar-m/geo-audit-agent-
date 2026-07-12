@@ -138,8 +138,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
     } catch (e) {
       console.error("Sitemap processing error (non-fatal):", e);
     }
-    const curStatus = await db.getAuditStatus(userId).catch(() => null);
-    db.updateStatus(userId, true, curStatus?.progress || 0, startUrlNormalized, hasRobots, hasSitemap).catch(() => {});
+    db.updateSitemapFlags(userId, hasRobots, hasSitemap).catch(() => {});
   })();
 
   // Don't await sitemapPromise — crawl starts immediately
