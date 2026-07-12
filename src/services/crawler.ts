@@ -58,6 +58,17 @@ function updateProfile(url: string, result: 'fetch' | 'playwright' | 'blocked', 
   }
 }
 
+// ── Cookie jar: persist cookies per domain across fetch requests ─────────────
+const cookieJar = new Map<string, string>();
+function getCookieHeader(url: string): string { return cookieJar.get(getDomain(url)) || ''; }
+function storeCookies(url: string, setCookieHeader: string | null) {
+  if (!setCookieHeader) return;
+  const domain = getDomain(url);
+  const existing = cookieJar.get(domain) || '';
+  const newCookies = setCookieHeader.split(',').map(c => c.split(';')[0].trim()).filter(Boolean).join('; ');
+  cookieJar.set(domain, existing ? `${existing}; ${newCookies}` : newCookies);
+}
+
 // ── Header rotation: Chrome, Mac Chrome, Googlebot (many sites whitelist it) ──
 const headerSets = [
   {
@@ -78,9 +89,14 @@ const headerSets = [
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
   },
+  {
+    // Bing bot — many WAFs whitelist major search crawlers
+    "User-Agent": "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+  },
 ];
 
-const fetchHeaders = headerSets[0];
 
 interface AuditConfig {
   depth: number;
@@ -257,19 +273,34 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
     try {
       // Try fetch first (Fast) with AbortController timeout
+      // Use adaptive header set based on domain profile, rotate on failure
       try {
-        const fetchStart = Date.now();
-        const ac3 = new AbortController();
-        const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 7000);
-        const response = await fetch(url, {
-          headers: fetchHeaders,
-          signal: ac3.signal,
-          redirect: "follow",
-        });
-        clearTimeout(t3);
-        pageLoadTime = Date.now() - fetchStart;
+        const profile = getProfile(url);
+        const startHeaderIdx = profile.bestHeaderSet;
+        let usedHeaderIdx = startHeaderIdx;
+        let fetchOk = false;
 
-        if (response.status) {
+        for (let attempt = 0; attempt < headerSets.length && !fetchOk; attempt++) {
+          usedHeaderIdx = (startHeaderIdx + attempt) % headerSets.length;
+          const fetchStart = Date.now();
+          const ac3 = new AbortController();
+          const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 7000);
+          let response: any = null;
+          try {
+            const cookies = getCookieHeader(url);
+            response = await fetch(url, {
+              headers: { ...headerSets[usedHeaderIdx], ...(cookies ? { Cookie: cookies } : {}) },
+              signal: ac3.signal,
+              redirect: "follow",
+            });
+          } catch (fetchErr: any) {
+            clearTimeout(t3);
+            lastErrorMessage = fetchErr.message || "Fetch failed";
+            continue; // try next header set
+          }
+          clearTimeout(t3);
+          pageLoadTime = Date.now() - fetchStart;
+
           finalUrl = response.url;
           const text = await Promise.race([
             response.text(),
@@ -284,24 +315,55 @@ export async function audit(startUrl: string, config: AuditConfig) {
               (lower.includes("captcha") && text.length < 2000))
           );
 
+          // Store cookies for future requests to this domain
+            storeCookies(url, response.headers.get('set-cookie'));
+
           if (quick || (text.length > 50 && !looksLikeABlock)) {
             htmlContent = text;
             headersMap["x-actual-status"] = response.status.toString();
-            response.headers.forEach((v, k) => {
-              headersMap[k] = v;
-            });
-
+            response.headers.forEach((v: string, k: string) => { headersMap[k] = v; });
             const finalUrlKey = finalUrl.replace(/\/$/, "").toLowerCase();
             visited.add(finalUrlKey);
             visited.add(finalUrlKey.replace(/^https?:\/\/(www\.)?/, ""));
-            const originalUrlKey = url.replace(/\/$/, "").toLowerCase();
-            visited.add(originalUrlKey);
+            visited.add(url.replace(/\/$/, "").toLowerCase());
+            updateProfile(url, 'fetch', pageLoadTime, usedHeaderIdx);
+            fetchOk = true;
           } else if (looksLikeABlock) {
             lastErrorMessage = "Fetch returned Cloudflare or Bot Challenge block page";
+            // Don't break — try next header set (Googlebot/Bingbot often bypasses)
           }
+        }
+
+        if (!fetchOk && !htmlContent) {
+          updateProfile(url, 'blocked');
         }
       } catch (e: any) {
         lastErrorMessage = e.message || "Fetch failed";
+      }
+
+      // Tier 2: ScraperAPI — only triggered when fetch is blocked/failed
+      // Consumes API credits only for bot-protected sites
+      if (!htmlContent && process.env.SCRAPER_API_KEY) {
+        try {
+          const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true`;
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), 30000);
+          const scraperRes = await fetch(scraperUrl, { signal: ac.signal }).catch(() => null);
+          clearTimeout(t);
+          if (scraperRes?.ok) {
+            const text = await scraperRes.text().catch(() => '');
+            if (text.length > 50) {
+              htmlContent = text;
+              finalUrl = url;
+              headersMap['x-actual-status'] = scraperRes.status.toString();
+              headersMap['x-via'] = 'scraperapi';
+              updateProfile(url, 'fetch', 0, 0);
+              db.updateStatus(userId, true, progress, `ScraperAPI bypass: ${url}`).catch(() => {});
+            }
+          }
+        } catch (e: any) {
+          console.error(`ScraperAPI failed for ${url}:`, e.message);
+        }
       }
 
       // Fallback to Playwright ONLY if:
@@ -309,7 +371,9 @@ export async function audit(startUrl: string, config: AuditConfig) {
       // 2. AND it's the root page (depth 0) — subpages skip Playwright entirely
       // 3. AND not in quick mode
       const isLikelySPA = !htmlContent || (htmlContent.length < 800 && htmlContent.toLowerCase().includes('<script') && !htmlContent.toLowerCase().includes('<body'));
-      const shouldTryPlaywright = !quick && isLikelySPA && currentDepth === 0;
+      const isBlocked403 = !htmlContent && (lastErrorMessage.includes('403') || lastErrorMessage.toLowerCase().includes('cloudflare') || lastErrorMessage.toLowerCase().includes('block'));
+      // Only use Playwright if ScraperAPI didn't already resolve it
+      const shouldTryPlaywright = !quick && (isLikelySPA || isBlocked403) && currentDepth === 0 && !headersMap['x-via'];
 
       if (shouldTryPlaywright) {
           // Wait if too many Playwright instances are running to prevent memory crashes
@@ -342,6 +406,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
                     ] : [])
                   ];
                   browser = await chromium.launch({ headless: true, args: chromiumArgs });
+                  console.log('Playwright browser launched');
                 } catch (launchErr: any) {
                   console.error("Playwright failed to launch:", launchErr.message);
                 } finally {
@@ -352,13 +417,33 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
             if (browser) {
               if (!sharedContext) {
+                const pwUA = userAgents[Math.floor(Math.random() * (userAgents.length - 1))]; // exclude Googlebot for Playwright
                 sharedContext = await browser.newContext({
-                  userAgent:
-                    userAgents[Math.floor(Math.random() * userAgents.length)],
-                  viewport: { width: 1280, height: 800 },
+                  userAgent: pwUA,
+                  viewport: { width: 1280 + Math.floor(Math.random() * 120), height: 800 + Math.floor(Math.random() * 80) },
+                  locale: 'en-US',
+                  timezoneId: 'America/New_York',
                   extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
                   bypassCSP: true,
                   ignoreHTTPSErrors: true,
+                });
+                // Stealth: inject before every page to spoof automation fingerprints
+                await sharedContext.addInitScript(() => {
+                  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                  Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                  Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                  (window as any).chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+                  // Canvas fingerprint noise
+                  const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+                  HTMLCanvasElement.prototype.toDataURL = function(type?: string) {
+                    const ctx = this.getContext('2d');
+                    if (ctx) {
+                      const imageData = ctx.getImageData(0, 0, this.width, this.height);
+                      for (let i = 0; i < imageData.data.length; i += 100) imageData.data[i] ^= 1;
+                      ctx.putImageData(imageData, 0, 0);
+                    }
+                    return origToDataURL.call(this, type);
+                  };
                 });
               }
 
@@ -404,20 +489,29 @@ try {
                   title.toLowerCase().includes("attention required");
 
                 if (isBlocked) {
-                  db.updateStatus(
-                    userId,
-                    true,
-                    progress,
-                    `Bypassing Cloudflare Challenge: ${url}`,
-                  ).catch(() => {});
-                  if (!quick) {
-                    await page.waitForTimeout(3000);
-                    await page.mouse.move(Math.random() * 500, Math.random() * 500).catch(() => {});
-                    await page.waitForTimeout(200);
-                    await page.mouse.click(Math.random() * 500, Math.random() * 500).catch(() => {});
-                    await page.waitForTimeout(1000);
+                  db.updateStatus(userId, true, progress, `Bypassing Cloudflare Challenge: ${url}`).catch(() => {});
+                  // Wait for cf-clearance cookie — Cloudflare JS challenge resolves in ~5s
+                  const cfResolved = await Promise.race([
+                    page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 8000 }).then(() => true).catch(() => false),
+                    new Promise<boolean>(r => setTimeout(() => r(false), 8000))
+                  ]);
+                  if (!cfResolved) {
+                    // Simulate human interaction as fallback
+                    await page.mouse.move(200 + Math.random() * 300, 200 + Math.random() * 300).catch(() => {});
+                    await page.waitForTimeout(500);
+                    await page.mouse.click(200 + Math.random() * 300, 200 + Math.random() * 300).catch(() => {});
+                    await page.waitForTimeout(2000);
                   }
-                } else if (isRoot) {
+                  // Extract cf-clearance and store in cookie jar for future fetch requests
+                  const cfCookies = await page.context().cookies().catch(() => []);
+                  const cfClearance = cfCookies.find((c: any) => c.name === 'cf-clearance');
+                  if (cfClearance) {
+                    storeCookies(url, `cf-clearance=${cfClearance.value}`);
+                    console.log(`Stored cf-clearance cookie for ${getDomain(url)}`);
+                  }
+                  // Reload after challenge resolution
+                  await page.reload({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+                } else if (currentDepth === 0) {
                   if (!quick) {
                     await page.waitForTimeout(400);
                     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2)).catch(() => {});
@@ -438,6 +532,7 @@ try {
                    headersMap["x-actual-status"] = resp.status().toString();
                 }
                 browserLastUsed = Date.now();
+                updateProfile(url, 'playwright');
 
                 const finalUrlKey = finalUrl.replace(/\/$/, "").toLowerCase();
                 visited.add(finalUrlKey);
@@ -619,7 +714,7 @@ try {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 2000);
             try {
-              const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: fetchHeaders });
+              const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: headerSets[0] });
               if (res.status >= 400) throw new Error(`${res.status}`);
             } finally { clearTimeout(timer); }
           })
