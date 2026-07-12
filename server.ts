@@ -1,6 +1,8 @@
 import fs from "fs";
 import crypto from "crypto";
 import express from "express";
+import { config } from "dotenv";
+config({ path: ".env.local" });
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import * as crawler from "./src/services/crawler.js";
