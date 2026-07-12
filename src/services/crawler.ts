@@ -193,7 +193,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
       try {
         const fetchStart = Date.now();
         const ac3 = new AbortController();
-        const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 10000);
+        const t3 = setTimeout(() => ac3.abort(), quick ? 8000 : 7000);
         const response = await fetch(url, {
           headers: fetchHeaders,
           signal: ac3.signal,
@@ -253,7 +253,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           if (!htmlContent) htmlContent = "";
         } else {
           // Wait if too many Playwright instances are running to prevent memory crashes
-          while (activePlaywrights >= (quick ? 20 : 8)) {
+          while (activePlaywrights >= (quick ? 20 : 12)) {
             await new Promise((r) => setTimeout(r, 50));
           }
           activePlaywrights++;
@@ -346,7 +346,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 try {
                     const pwStart = Date.now();
                     let resp = await page
-                      .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 8000 })
+                      .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 5000 })
                   .catch((err) => {
                     lastErrorMessage = err.message || "Playwright goto failed";
                     return null;
@@ -569,7 +569,7 @@ try {
         const results = await Promise.allSettled(
           batch.map(async (url) => {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 3000);
+            const timer = setTimeout(() => controller.abort(), 2000);
             try {
               const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: fetchHeaders });
               if (res.status >= 400) throw new Error(`${res.status}`);
