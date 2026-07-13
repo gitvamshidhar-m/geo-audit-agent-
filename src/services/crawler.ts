@@ -680,7 +680,61 @@ try {
         }
       }
 
-      // Tier 4: ScraperAPI — last resort, only if all else failed
+      // Tier 4: ScrapingBee — free tier (1000 credits/month)
+      if (!htmlContent && process.env.SCRAPINGBEE_API_KEY) {
+        try {
+          db.updateStatus(userId, true, progress, `ScrapingBee bypass: ${url}`).catch(() => {});
+          const sbUrl = `https://app.scrapingbee.com/api/v1/?api_key=${process.env.SCRAPINGBEE_API_KEY}&url=${encodeURIComponent(url)}&render_js=true`;
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), SCRAPER_TIMEOUT_MS);
+          const sbRes = await fetch(sbUrl, { signal: ac.signal }).catch(() => null);
+          clearTimeout(t);
+          if (sbRes?.ok) {
+            const text = await sbRes.text().catch(() => '');
+            if (text.length > 50) {
+              htmlContent = text;
+              finalUrl = url;
+              headersMap['x-actual-status'] = sbRes.status.toString();
+              headersMap['x-via'] = 'scrapingbee';
+              updateProfile(url, 'fetch', 0, 0);
+            }
+          }
+        } catch (e: any) {
+          console.error(`ScrapingBee failed for ${url}:`, e.message);
+        }
+      }
+
+      // Tier 5: Free proxy rotation — uses public proxy lists, zero cost
+      if (!htmlContent && !quick) {
+        const freeProxies = [
+          'https://corsproxy.io/?', 'https://api.allorigins.win/raw?url=',
+        ];
+        for (const proxyBase of freeProxies) {
+          if (htmlContent) break;
+          try {
+            const proxyUrl = `${proxyBase}${encodeURIComponent(url)}`;
+            const ac = new AbortController();
+            const t = setTimeout(() => ac.abort(), 8000);
+            const proxyRes = await fetch(proxyUrl, {
+              headers: headerSets[0],
+              signal: ac.signal,
+            }).catch(() => null);
+            clearTimeout(t);
+            if (proxyRes?.ok) {
+              const text = await proxyRes.text().catch(() => '');
+              if (text.length > 100 && text.toLowerCase().includes('<html')) {
+                htmlContent = text;
+                finalUrl = url;
+                headersMap['x-actual-status'] = '200';
+                headersMap['x-via'] = 'free-proxy';
+                updateProfile(url, 'fetch', 0, 0);
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // Tier 6: ScraperAPI — absolute last resort
       if (!htmlContent && process.env.SCRAPER_API_KEY) {
         const domain = getDomain(url);
         if (!scraperDomains.has(domain)) {
