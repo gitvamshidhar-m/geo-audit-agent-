@@ -24,6 +24,7 @@ const scraperDomains = new Set<string>();
 
 const MAP_CAP = 500;
 function capSet<V>(s: Set<V>) { if (s.size > MAP_CAP) s.delete(s.values().next().value); }
+function capMap<K, V>(m: Map<K, V>) { if (m.size >= MAP_CAP) { const first = m.keys().next().value; m.delete(first); } }
 
 // In-memory cache: avoids re-fetching same URLs across audits
 const urlCache = new Map<string, { html: string; finalUrl: string; headers: Record<string, string>; loadTime: number; time: number }>();
