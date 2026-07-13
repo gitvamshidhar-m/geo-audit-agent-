@@ -83,6 +83,7 @@ import { PromptfooPanel } from './components/PromptfooPanel';
 import { ScoringModelPanel } from './components/ScoringModelPanel';
 import { SecurityRiskPanel } from './components/SecurityRiskPanel';
 import { AIBenchmarkPanel } from './components/AIBenchmarkPanel';
+import { HistoryPanel } from './components/HistoryPanel';
 import { AIUXAuditPanel } from './components/AIUXAuditPanel';
 import { EnterpriseAuditPanel } from './components/EnterpriseAuditPanel';
 import { SEOCheckPanel } from './components/SEOCheckPanel';
@@ -127,7 +128,7 @@ const getJitteredScore = (url: string, baseScore: number, index: number) => {
 
 export default function App() {
   console.log("App component rendering...");
-  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare' | 'competitors' | 'crux'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pages' | 'scoring-model' | 'security-risk' | 'ai-benchmark' | 'ai-ux-audit' | 'enterprise-audit' | 'seo-check' | 'ai' | 'brief' | 'strategy' | 'experimentation' | 'market' | 'promptfoo' | 'compare' | 'competitors' | 'crux' | 'history'>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(1000);
@@ -437,24 +438,36 @@ export default function App() {
   }, [currentUser.userId]);
 
   useEffect(() => {
-    const timer = setInterval(async () => {
-      if (isAuditing) {
-        try {
-          const res = await apiFetch('/api/audit/status');
-          if (!res.ok) throw new Error("Status Fetch Failed");
-          const data = await res.json();
-          setProgress(data.progress);
-          if (!data.is_running) {
-            setIsAuditing(false);
-            setAuditEndTime(Date.now());
-            fetchResults().catch(err => console.error("Post-audit fetch failed", err));
-          }
-        } catch (err) {
-          console.error("Audit status poll failed", err);
+    if (!isAuditing) return;
+    const headers: Record<string, string> = {};
+    if (currentUser.userId) headers["x-user-id"] = currentUser.userId;
+    const evtSource = new EventSource("/api/audit/stream");
+    const onMsg = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.progress !== undefined) setProgress(data.progress);
+        if (!data.is_running) {
+          setIsAuditing(false);
+          setAuditEndTime(Date.now());
+          fetchResults().catch(err => console.error("Post-audit fetch failed", err));
+          evtSource.close();
         }
-      }
-    }, 2000);
-    return () => clearInterval(timer);
+      } catch {}
+    };
+    evtSource.addEventListener("message", onMsg);
+    evtSource.onerror = () => {
+      // Fallback: if SSE fails, do a single status check
+      evtSource.close();
+      apiFetch('/api/audit/status').then(r => r.json()).then(data => {
+        setProgress(data.progress);
+        if (!data.is_running) {
+          setIsAuditing(false);
+          setAuditEndTime(Date.now());
+          fetchResults().catch(() => {});
+        }
+      }).catch(() => {});
+    };
+    return () => evtSource.close();
   }, [isAuditing, currentUser.userId]);
 
   const [isScanningPlagiarism, setIsScanningPlagiarism] = useState(false);
@@ -854,6 +867,13 @@ export default function App() {
               onClick={() => setActiveTab('promptfoo')} 
               icon={<FlaskConical size={18} />} 
               label="Prompt Studio" 
+              collapsed={isSidebarCollapsed}
+            />
+            <SidebarLink 
+              active={activeTab === 'history'} 
+              onClick={() => setActiveTab('history')} 
+              icon={<History size={18} />} 
+              label="History" 
               collapsed={isSidebarCollapsed}
             />
           </nav>
@@ -2407,6 +2427,22 @@ export default function App() {
               >
                 <div className="max-w-7xl mx-auto">
                   <PromptfooPanel apiKeys={apiKeys} />
+                </div>
+              </motion.div>
+            )}
+            {activeTab === 'history' && (
+              <motion.div
+                key="history-panel"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="w-full"
+              >
+                <div className="max-w-7xl mx-auto">
+                  <HistoryPanel
+                    apiFetch={apiFetch}
+                    onLoadAudit={(auditUrl) => { setUrl(auditUrl); startAudit(auditUrl); }}
+                  />
                 </div>
               </motion.div>
             )}

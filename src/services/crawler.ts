@@ -365,6 +365,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
       progress,
       `Audit [${startedCount}/${maxPages}]: ${url}`,
     ).catch(() => {});
+    // Push SSE update for real-time progress
+    (globalThis as any).__ssePush?.(userId, { progress, currentUrl: url, is_running: true });
 
     let htmlContent = "";
     let finalUrl = url;
@@ -842,6 +844,7 @@ try {
     if (browser) await browser.close().catch(() => {});
     if (sharedContext) await sharedContext.close().catch(() => {});
     await db.updateStatus(userId, false, 100, "Completed");
+    (globalThis as any).__sseClose?.(userId);
     await db.clearCrawlState(userId);
     await db.markCached(userId, startUrl);
     try {

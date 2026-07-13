@@ -620,6 +620,40 @@ async function startServer() {
     }
   });
 
+  // SSE endpoint for real-time progress updates
+  const sseClients = new Map<string, Set<any>>();
+  app.get("/api/audit/stream", (req, res) => {
+    const userId = (req.headers["x-user-id"] as string) || "public";
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write("data: {\"connected\":true}\n\n");
+    if (!sseClients.has(userId)) sseClients.set(userId, new Set());
+    sseClients.get(userId)!.add(res);
+    req.on("close", () => { sseClients.get(userId)?.delete(res); });
+  });
+  // Helper to push SSE updates (called from crawler)
+  (globalThis as any).__ssePush = (userId: string, data: any) => {
+    const clients = sseClients.get(userId);
+    if (!clients || clients.size === 0) return;
+    const msg = `data: ${JSON.stringify(data)}\n\n`;
+    for (const client of clients) {
+      try { client.write(msg); } catch {}
+    }
+  };
+  (globalThis as any).__sseClose = (userId: string) => {
+    const clients = sseClients.get(userId);
+    if (!clients) return;
+    const msg = `data: ${JSON.stringify({ is_running: false, progress: 100 })}\n\n`;
+    for (const client of clients) {
+      try { client.write(msg); client.end(); } catch {}
+    }
+    sseClients.delete(userId);
+  };
+
   app.get("/api/audit/results", async (req, res) => {
     const userId = (req.headers["x-user-id"] as string) || "public";
     try {
