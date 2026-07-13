@@ -20,10 +20,8 @@ export function auditQueued(startUrl: string, config: AuditConfig) {
 }
 
 // ScraperAPI domain cache — activates on first fetch failure per domain
-const scraperDomains = new Set<string>();
 
 const MAP_CAP = 500;
-function capSet<V>(s: Set<V>) { if (s.size > MAP_CAP) s.delete(s.values().next().value); }
 function capMap<K, V>(m: Map<K, V>) { if (m.size >= MAP_CAP) { const first = m.keys().next().value; m.delete(first); } }
 
 // In-memory cache: avoids re-fetching same URLs across audits
@@ -772,15 +770,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
         }
       }
 
-      // Tier 6: ScraperAPI — absolute last resort
+      // Tier 6: ScraperAPI — absolute last resort (only when ALL other tiers failed for this specific page)
       if (!htmlContent && process.env.SCRAPER_API_KEY) {
-        const domain = getDomain(url);
-        if (!scraperDomains.has(domain)) {
-          capSet(scraperDomains);
-          scraperDomains.add(domain);
-        }
-      }
-      if (!htmlContent && process.env.SCRAPER_API_KEY && scraperDomains.has(getDomain(url))) {
         try {
           const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true`;
           const ac = new AbortController();
