@@ -95,7 +95,7 @@ function updateProfile(url: string, result: 'fetch' | 'playwright' | 'blocked', 
 // ── Failure Pattern Learning ──────────────────────────────────────────────────
 // Tracks URL path patterns that fail and skips similar URLs
 const failurePatterns = new Map<string, number>(); // pattern -> failure count
-const FAILURE_THRESHOLD = 3; // skip pattern after 3 failures
+const FAILURE_THRESHOLD = 10; // skip pattern after 10 failures (not 3 — avoid false positives on large sites)
 
 function extractPattern(url: string): string {
   const slashIdx = url.indexOf('/', url.indexOf('//') + 2);
@@ -813,8 +813,8 @@ try {
       try {
         // Adaptive speed: slow down if domain is rate-limited
         const profile = getProfile(task.url);
-        if (profile.rateLimited > 2 && profile.avgFetchMs > 0) {
-          const delay = Math.min(2000, profile.rateLimited * 200);
+        if (profile.rateLimited > 5 && profile.avgFetchMs > 0) {
+          const delay = Math.min(500, profile.rateLimited * 50);
           await new Promise(r => setTimeout(r, delay));
         }
         await getPageData(task.url, task.currentDepth);
