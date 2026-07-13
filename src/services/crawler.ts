@@ -573,7 +573,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 try {
                     const pwStart = Date.now();
                     let resp = await page
-                      .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 5000 })
+                      .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 15000 })
                   .catch((err) => {
                     lastErrorMessage = err.message || "Playwright goto failed";
                     return null;
@@ -591,8 +591,8 @@ try {
                   db.updateStatus(userId, true, progress, `Bypassing Cloudflare Challenge: ${url}`).catch(() => {});
                   // Wait for cf-clearance cookie — Cloudflare JS challenge resolves in ~5s
                   const cfResolved = await Promise.race([
-                    page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 8000 }).then(() => true).catch(() => false),
-                    new Promise<boolean>(r => setTimeout(() => r(false), 8000))
+                    page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 15000 }).then(() => true).catch(() => false),
+                    new Promise<boolean>(r => setTimeout(() => r(false), 15000))
                   ]);
                   if (!cfResolved) {
                     // Simulate human interaction as fallback
@@ -609,7 +609,7 @@ try {
                     console.log(`Stored cf-clearance cookie for ${getDomain(url)}`);
                   }
                   // Reload after challenge resolution
-                  await page.reload({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+                  await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
                 } else if (currentDepth === 0) {
                   if (!quick) {
                     await page.waitForTimeout(400);
@@ -624,7 +624,7 @@ try {
                 finalUrl = page.url();
                 htmlContent = await Promise.race([
                   page.content(),
-                  new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Playwright content timeout")), 5000))
+                  new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Playwright content timeout")), 10000))
                 ]);
                 headersMap = (await resp?.allHeaders()) || {};
                 if (resp) {
@@ -661,7 +661,7 @@ try {
           const flareRes = await fetch(flareUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cmd: 'request.get', url, maxTimeout: 30000 }),
+            body: JSON.stringify({ cmd: 'request.get', url, maxTimeout: 60000 }),
             signal: ac.signal,
           }).catch(() => null);
           clearTimeout(t);

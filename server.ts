@@ -47,6 +47,18 @@ async function startServer() {
       groq: 30, openai: 20, anthropic: 15, gemini: 15,
       deepseek: 20, perplexity: 15, huggingface: 5
     };
+    // FlareSolverr keep-alive — ping every 4 min to prevent Render free tier sleep
+    if (process.env.FLARESOLVERR_URL) {
+      const flareUrl = process.env.FLARESOLVERR_URL;
+      setInterval(async () => {
+        try {
+          await fetch(flareUrl, { signal: AbortSignal.timeout(10000) });
+          console.log(`[FLARESOLVERR] Keep-alive ping OK`);
+        } catch (e: any) {
+          console.log(`[FLARESOLVERR] Keep-alive ping failed: ${e.message}`);
+        }
+      }, 4 * 60 * 1000);
+    }
     const rateLimit = (defaultMax: number, windowMs: number) => (req: any, res: any, next: any) => {
       const userId = (req.headers['x-user-id'] as string) || req.ip || 'unknown';
       const provider = req.body?.provider || 'unknown';
