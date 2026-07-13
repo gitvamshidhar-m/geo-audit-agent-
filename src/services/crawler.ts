@@ -651,7 +651,36 @@ try {
           }
       }
 
-      // Tier 3: ScraperAPI — last resort, only if Playwright also failed
+      // Tier 3: FlareSolverr — open source Cloudflare bypass (free, self-hosted)
+      if (!htmlContent && process.env.FLARESOLVERR_URL) {
+        try {
+          db.updateStatus(userId, true, progress, `FlareSolverr bypass: ${url}`).catch(() => {});
+          const flareUrl = `${process.env.FLARESOLVERR_URL}/v1`;
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), SCRAPER_TIMEOUT_MS);
+          const flareRes = await fetch(flareUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cmd: 'request.get', url, maxTimeout: 30000 }),
+            signal: ac.signal,
+          }).catch(() => null);
+          clearTimeout(t);
+          if (flareRes?.ok) {
+            const flareData = await flareRes.json().catch(() => null);
+            if (flareData?.solution?.response && flareData.solution.response.length > 50) {
+              htmlContent = flareData.solution.response;
+              finalUrl = flareData.solution.url || url;
+              headersMap['x-actual-status'] = '200';
+              headersMap['x-via'] = 'flaresolverr';
+              updateProfile(url, 'fetch', 0, 0);
+            }
+          }
+        } catch (e: any) {
+          console.error(`FlareSolverr failed for ${url}:`, e.message);
+        }
+      }
+
+      // Tier 4: ScraperAPI — last resort, only if all else failed
       if (!htmlContent && process.env.SCRAPER_API_KEY) {
         const domain = getDomain(url);
         if (!scraperDomains.has(domain)) {
