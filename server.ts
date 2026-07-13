@@ -57,7 +57,7 @@ async function startServer() {
         } catch (e: any) {
           console.log(`[FLARESOLVERR] Keep-alive ping failed: ${e.message}`);
         }
-      }, 4 * 60 * 1000);
+      }, 2 * 60 * 1000);
     }
     const rateLimit = (defaultMax: number, windowMs: number) => (req: any, res: any, next: any) => {
       const userId = (req.headers['x-user-id'] as string) || req.ip || 'unknown';
