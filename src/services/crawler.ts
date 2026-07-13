@@ -47,6 +47,8 @@ interface DomainProfile {
   avgFetchMs: number;
   strategy: 'fetch' | 'playwright' | 'blocked';
   bestHeaderSet: number;
+  rateLimited: number;
+  dynamicConcurrency: number;
 }
 const domainProfiles = new Map<string, DomainProfile>();
 
@@ -58,7 +60,7 @@ function getProfile(url: string): DomainProfile {
   const domain = getDomain(url);
   if (!domainProfiles.has(domain)) {
     capMap(domainProfiles);
-    domainProfiles.set(domain, { fetchSuccess: 0, playwrightNeeded: 0, blocked: 0, avgFetchMs: 0, strategy: 'fetch', bestHeaderSet: 0 });
+    domainProfiles.set(domain, { fetchSuccess: 0, playwrightNeeded: 0, blocked: 0, avgFetchMs: 0, strategy: 'fetch', bestHeaderSet: 0, rateLimited: 0, dynamicConcurrency: 12 });
   }
   return domainProfiles.get(domain)!;
 }
@@ -81,6 +83,77 @@ function updateProfile(url: string, result: 'fetch' | 'playwright' | 'blocked', 
     else if (p.playwrightNeeded / total > 0.4) p.strategy = 'playwright';
     else p.strategy = 'fetch';
   }
+  // Dynamic concurrency: slow down on rate limits, speed up on success
+  if (result === 'blocked') {
+    p.rateLimited++;
+    p.dynamicConcurrency = Math.max(2, p.dynamicConcurrency - 2);
+  } else if (result === 'fetch' && fetchMs < 2000) {
+    p.dynamicConcurrency = Math.min(20, p.dynamicConcurrency + 1);
+  }
+}
+
+// ── Failure Pattern Learning ──────────────────────────────────────────────────
+// Tracks URL path patterns that fail and skips similar URLs
+const failurePatterns = new Map<string, number>(); // pattern -> failure count
+const FAILURE_THRESHOLD = 3; // skip pattern after 3 failures
+
+function extractPattern(url: string): string {
+  try {
+    const u = new URL(url);
+    const segments = u.pathname.split('/').filter(Boolean);
+    // Use first 2 path segments as pattern (e.g., /blog/post-slug → /blog/*)
+    if (segments.length >= 2) return `/${segments[0]}/*`;
+    if (segments.length === 1) return `/${segments[0]}/*`;
+    return '/';
+  } catch { return '/'; }
+}
+
+function recordFailure(url: string) {
+  const pattern = extractPattern(url);
+  capMap(failurePatterns);
+  failurePatterns.set(pattern, (failurePatterns.get(pattern) || 0) + 1);
+}
+
+function isPatternBlocked(url: string): boolean {
+  const pattern = extractPattern(url);
+  return (failurePatterns.get(pattern) || 0) >= FAILURE_THRESHOLD;
+}
+
+// ── Link Priority Scorer ──────────────────────────────────────────────────────
+// Scores URLs so high-value pages get crawled first
+function scoreLink(url: string): number {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.toLowerCase();
+    const segments = path.split('/').filter(Boolean);
+    let score = 100;
+
+    // Depth penalty: deeper pages = lower priority
+    score -= segments.length * 10;
+
+    // High-value page boosts
+    const highValue = ['/', '/home', '/about', '/services', '/products', '/pricing', '/contact', '/features'];
+    if (highValue.some(p => path === p || path === p + '/')) score += 50;
+
+    // Medium-value boosts
+    const medValue = ['/blog', '/portfolio', '/case-studies', '/testimonials', '/faq'];
+    if (medValue.some(p => path.startsWith(p))) score += 25;
+
+    // Low-value penalties
+    const lowValue = ['/privacy', '/terms', '/cookies', '/legal', '/sitemap', '/robots.txt', '/wp-admin', '/wp-login'];
+    if (lowValue.some(p => path.startsWith(p))) score -= 40;
+
+    // File type penalties
+    if (path.match(/\.(pdf|jpg|jpeg|png|gif|svg|zip|mp4|mp3)$/)) score -= 60;
+
+    // Query param penalty: more params = lower priority
+    score -= u.searchParams.size * 5;
+
+    // Hash-only URLs (same page sections)
+    if (u.hash && !path.includes('.')) score -= 20;
+
+    return Math.max(0, score);
+  } catch { return 50; }
 }
 
 // ── Cookie jar: persist cookies per domain across fetch requests ─────────────
@@ -639,18 +712,25 @@ try {
       if (currentDepth < depth && processedCount < maxPages) {
         const queueBudget = maxPages * 2 - processedCount;
         let added = 0;
+        const newLinks: { url: string; currentDepth: number; score: number }[] = [];
         for (const link of pageData.links.internal) {
           if (added >= queueBudget) break;
           const linkKey = link.trim().replace(/\/$/, "").toLowerCase();
-          if (!visited.has(linkKey)) {
+          if (!visited.has(linkKey) && !isPatternBlocked(link)) {
             visited.add(linkKey);
-            queue.push({ url: link, currentDepth: currentDepth + 1 });
+            newLinks.push({ url: link, currentDepth: currentDepth + 1, score: scoreLink(link) });
             added++;
           }
+        }
+        // Insert by priority: higher score = crawled first
+        newLinks.sort((a, b) => b.score - a.score);
+        for (const item of newLinks) {
+          queue.push({ url: item.url, currentDepth: item.currentDepth });
         }
       }
     } else {
       console.log(`Saving fallback restricted page for ${url}`);
+      recordFailure(url);
       
       const isConnectionError = 
         lastErrorMessage.toLowerCase().includes("dns") ||
@@ -730,6 +810,12 @@ try {
       startedCount++;
       activeWorkers++;
       try {
+        // Adaptive speed: slow down if domain is rate-limited
+        const profile = getProfile(task.url);
+        if (profile.rateLimited > 2 && profile.avgFetchMs > 0) {
+          const delay = Math.min(2000, profile.rateLimited * 200);
+          await new Promise(r => setTimeout(r, delay));
+        }
         await getPageData(task.url, task.currentDepth);
       } catch (err) {
         console.error("Worker process error:", err);
