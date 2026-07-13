@@ -15,6 +15,9 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      target: 'esnext',
+    },
     server: {
       hmr: false,
       allowedHosts: true,
