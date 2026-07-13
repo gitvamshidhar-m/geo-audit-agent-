@@ -465,209 +465,232 @@ export async function audit(startUrl: string, config: AuditConfig) {
       }
 
       // Tier 2: Playwright — bot protection bypass (runs before ScraperAPI)
-      // Fallback to Playwright ONLY if:
-      // 1. Fetch completely failed (no content at all)
-      // 2. AND not in quick mode
-      // 3. AND ScraperAPI didn't already resolve it
       const isLikelySPA = !htmlContent || (htmlContent.length < 800 && htmlContent.toLowerCase().includes('<script') && !htmlContent.toLowerCase().includes('<body'));
       const isBlocked403 = !htmlContent && (lastErrorMessage.includes('403') || lastErrorMessage.toLowerCase().includes('cloudflare') || lastErrorMessage.toLowerCase().includes('block'));
-      // Only use Playwright if ScraperAPI didn't already resolve it
       const shouldTryPlaywright = !quick && (isLikelySPA || isBlocked403) && !headersMap['x-via'];
 
-      if (shouldTryPlaywright) {
-          // Wait if too many Playwright instances are running to prevent memory crashes
-          while (activePlaywrights >= MAX_PLAYWRIGHTS) {
-            await new Promise((r) => setTimeout(r, 50));
-          }
-          activePlaywrights++;
-
-          try {
+      async function tryPlaywright(attemptNumber = 1): Promise<boolean> {
+        while (activePlaywrights >= MAX_PLAYWRIGHTS) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        activePlaywrights++;
+        let pwPage: any = null;
+        let succeeded = false;
+        try {
+          if (!browser) {
+            while (isLaunchingBrowser) {
+              await new Promise((r) => setTimeout(r, 100));
+            }
             if (!browser) {
-              while (isLaunchingBrowser) {
-                await new Promise((r) => setTimeout(r, 100));
-              }
-              if (!browser) {
-                isLaunchingBrowser = true;
-                try {
-                  const chromiumArgs = [
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--single-process",
-                    "--disable-web-security",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    "--disable-blink-features=AutomationControlled",
-                    ...(isRender ? [
-                      "--disable-gpu",
-                      "--no-zygote",
-                      "--memory-pressure-off",
-                      "--js-flags=--max-old-space-size=128",
-                    ] : [])
-                  ];
-                  browser = await chromium.launch({ headless: true, args: chromiumArgs });
-                  console.log('Playwright browser launched');
-                } catch (launchErr: any) {
-                  console.error("Playwright failed to launch:", launchErr.message);
-                } finally {
-                  isLaunchingBrowser = false;
-                }
-              }
-            }
-
-            if (browser) {
-              if (!sharedContext) {
-                const pwUA = userAgents[Math.floor(Math.random() * (userAgents.length - 1))]; // exclude Googlebot for Playwright
-                sharedContext = await browser.newContext({
-                  userAgent: pwUA,
-                  viewport: { width: 1280 + Math.floor(Math.random() * 120), height: 800 + Math.floor(Math.random() * 80) },
-                  locale: 'en-US',
-                  timezoneId: 'America/New_York',
-                  extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
-                  bypassCSP: true,
-                  ignoreHTTPSErrors: true,
-                });
-                // Stealth: inject before every page to spoof automation fingerprints
-                await sharedContext.addInitScript(() => {
-                  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                  Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-                  Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-                  (window as any).chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
-                  // Canvas fingerprint noise
-                  const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
-                  HTMLCanvasElement.prototype.toDataURL = function(type?: string) {
-                    const ctx = this.getContext('2d');
-                    if (ctx) {
-                      const imageData = ctx.getImageData(0, 0, this.width, this.height);
-                      for (let i = 0; i < imageData.data.length; i += 100) imageData.data[i] ^= 1;
-                      ctx.putImageData(imageData, 0, 0);
-                    }
-                    return origToDataURL.call(this, type);
-                  };
-                });
-              }
-
-              const page = await sharedContext.newPage();
-
-              // Optimization: Block heavy resources and non-essential trackers/analytics to speed up crawl tremendously
-              await page.route('**/*', (route) => {
-                const urlStr = route.request().url().toLowerCase();
-                const isAsset = 
-                  urlStr.endsWith('.png') || urlStr.endsWith('.jpg') || urlStr.endsWith('.jpeg') ||
-                  urlStr.endsWith('.gif') || urlStr.endsWith('.webp') || urlStr.endsWith('.svg') ||
-                  urlStr.endsWith('.woff') || urlStr.endsWith('.woff2') || urlStr.endsWith('.ttf') ||
-                  urlStr.endsWith('.css') || urlStr.endsWith('.mp4') || urlStr.endsWith('.mp3');
-                
-                const isTracker = 
-                  urlStr.includes('analytics') || urlStr.includes('tracker') || 
-                  urlStr.includes('gtm.js') || urlStr.includes('analytics.js') ||
-                  urlStr.includes('facebook') || urlStr.includes('hotjar') || 
-                  urlStr.includes('doubleclick') || urlStr.includes('intercom') ||
-                  urlStr.includes('google-analytics');
-
-                if (isAsset || isTracker) {
-                  return route.abort();
-                }
-                return route.continue();
-              });
-
-try {
-                    const pwStart = Date.now();
-                    let resp = await page
-                      .goto(url, { waitUntil: "domcontentloaded", timeout: quick ? 3000 : 15000 })
-                  .catch((err) => {
-                    lastErrorMessage = err.message || "Playwright goto failed";
-                    return null;
-                  });
-                if (!pageLoadTime) pageLoadTime = Date.now() - pwStart;
-                
-                // Cloudflare Bypass Attempt
-                const title = await page.title().catch(() => "");
-                const isBlocked = 
-                  title.toLowerCase().includes("just a moment") ||
-                  title.toLowerCase().includes("cloudflare") ||
-                  title.toLowerCase().includes("attention required");
-
-                if (isBlocked) {
-                  db.updateStatus(userId, true, progress, `Bypassing Cloudflare Challenge: ${url}`).catch(() => {});
-                  // Wait for cf-clearance cookie — Cloudflare JS challenge resolves in ~5-10s
-                  const cfResolved = await Promise.race([
-                    page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 20000 }).then(() => true).catch(() => false),
-                    new Promise<boolean>(r => setTimeout(() => r(false), 20000))
-                  ]);
-                  if (!cfResolved) {
-                    // Simulate human interaction: move mouse, scroll, click
-                    for (let i = 0; i < 3; i++) {
-                      await page.mouse.move(100 + Math.random() * 500, 100 + Math.random() * 400).catch(() => {});
-                      await page.waitForTimeout(200 + Math.random() * 300);
-                    }
-                    await page.mouse.click(300 + Math.random() * 200, 300 + Math.random() * 200).catch(() => {});
-                    await page.waitForTimeout(1000);
-                    // Scroll down and up to trigger more JS execution
-                    await page.evaluate(() => window.scrollTo(0, 500)).catch(() => {});
-                    await page.waitForTimeout(1000);
-                    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-                    await page.waitForTimeout(3000);
-                    // Check again after interaction
-                    const cfResolved2 = await Promise.race([
-                      page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 10000 }).then(() => true).catch(() => false),
-                      new Promise<boolean>(r => setTimeout(() => r(false), 10000))
-                    ]);
-                    if (!cfResolved2) {
-                      console.log(`Cloudflare challenge NOT resolved for ${url} after interaction`);
-                    }
-                  }
-                  // Extract cf-clearance and store in cookie jar for future fetch requests
-                  const cfCookies = await page.context().cookies().catch(() => []);
-                  const cfClearance = cfCookies.find((c: any) => c.name === 'cf-clearance');
-                  if (cfClearance) {
-                    storeCookies(url, `cf-clearance=${cfClearance.value}`);
-                    console.log(`Stored cf-clearance cookie for ${getDomain(url)}`);
-                  }
-                  // Reload after challenge resolution
-                  await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-                } else if (currentDepth === 0) {
-                  if (!quick) {
-                    await page.waitForTimeout(400);
-                    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2)).catch(() => {});
-                    await page.waitForTimeout(200);
-                    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-                  }
-                } else {
-                  if (!quick) await page.waitForTimeout(300);
-                }
-
-                finalUrl = page.url();
-                htmlContent = await Promise.race([
-                  page.content(),
-                  new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Playwright content timeout")), 10000))
-                ]);
-                headersMap = (await resp?.allHeaders()) || {};
-                if (resp) {
-                   headersMap["x-actual-status"] = resp.status().toString();
-                }
-                browserLastUsed = Date.now();
-                updateProfile(url, 'playwright');
-
-                const finalUrlKey = finalUrl.replace(/\/$/, "").toLowerCase();
-                visited.add(finalUrlKey);
-                visited.add(finalUrlKey.replace(/^https?:\/\/(www\.)?/, ""));
-              } catch (pwErr: any) {
-                console.error(
-                  `Playwright fallback failed for ${url}:`,
-                  pwErr.message,
-                );
-                lastErrorMessage = pwErr.message || "Playwright headless crash or error";
+              isLaunchingBrowser = true;
+              try {
+                const chromiumArgs = [
+                  "--no-sandbox",
+                  "--disable-setuid-sandbox",
+                  "--disable-dev-shm-usage",
+                  "--single-process",
+                  "--disable-web-security",
+                  "--disable-features=IsolateOrigins,site-per-process",
+                  "--disable-blink-features=AutomationControlled",
+                  ...(isRender ? [
+                    "--disable-gpu",
+                    "--no-zygote",
+                    "--memory-pressure-off",
+                    "--js-flags=--max-old-space-size=128",
+                  ] : [])
+                ];
+                browser = await chromium.launch({ headless: true, args: chromiumArgs });
+                console.log('Playwright browser launched');
+              } catch (launchErr: any) {
+                console.error("Playwright failed to launch:", launchErr.message);
               } finally {
-                await page?.close().catch(() => {});
+                isLaunchingBrowser = false;
               }
             }
-          } finally {
-            activePlaywrights--;
           }
+
+          if (browser) {
+            // Create fresh context on retry to clear stale state
+            const pwUA = attemptNumber > 1
+              ? userAgents[Math.floor(Math.random() * userAgents.length)]
+              : userAgents[Math.floor(Math.random() * (userAgents.length - 1))];
+            const pwContext = await browser.newContext({
+              userAgent: pwUA,
+              viewport: { width: 1280 + Math.floor(Math.random() * 120), height: 800 + Math.floor(Math.random() * 80) },
+              locale: 'en-US',
+              timezoneId: 'America/New_York',
+              extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
+              bypassCSP: true,
+              ignoreHTTPSErrors: true,
+            });
+            await pwContext.addInitScript(() => {
+              Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+              Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+              Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+              (window as any).chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+              const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+              HTMLCanvasElement.prototype.toDataURL = function(type?: string) {
+                const ctx = this.getContext('2d');
+                if (ctx) {
+                  const imageData = ctx.getImageData(0, 0, this.width, this.height);
+                  for (let i = 0; i < imageData.data.length; i += 100) imageData.data[i] ^= 1;
+                  ctx.putImageData(imageData, 0, 0);
+                }
+                return origToDataURL.call(this, type);
+              };
+            });
+
+            pwPage = await pwContext.newPage();
+
+            // Block only trackers, NOT CSS (Cloudflare challenge needs CSS)
+            await pwPage.route('**/*', (route) => {
+              const urlStr = route.request().url().toLowerCase();
+              const isTracker =
+                urlStr.includes('analytics') || urlStr.includes('tracker') ||
+                urlStr.includes('gtm.js') || urlStr.includes('analytics.js') ||
+                urlStr.includes('facebook') || urlStr.includes('hotjar') ||
+                urlStr.includes('doubleclick') || urlStr.includes('intercom') ||
+                urlStr.includes('google-analytics');
+              if (isTracker) return route.abort();
+              return route.continue();
+            });
+
+            const pwStart = Date.now();
+            let resp = await pwPage
+              .goto(url, { waitUntil: "networkidle", timeout: 30000 })
+              .catch((err: any) => {
+                lastErrorMessage = err.message || "Playwright goto failed";
+                return null;
+              });
+            if (!pageLoadTime) pageLoadTime = Date.now() - pwStart;
+
+            if (resp && resp.status() >= 400) {
+              console.log(`Playwright got status ${resp.status()} for ${url}`);
+            }
+
+            // Detect Cloudflare challenge via title + body text
+            const pwTitle = await pwPage.title().catch(() => "");
+            const pwBody = await pwPage.evaluate(() => document.body?.innerText?.substring(0, 500) || "").catch(() => "");
+            const pwHtml = await pwPage.content().catch(() => "");
+            const isBlocked =
+              pwTitle.toLowerCase().includes("just a moment") ||
+              pwTitle.toLowerCase().includes("cloudflare") ||
+              pwTitle.toLowerCase().includes("attention required") ||
+              pwBody.toLowerCase().includes("checking your browser") ||
+              pwBody.toLowerCase().includes("verifying you are human") ||
+              pwBody.toLowerCase().includes("enable javascript") ||
+              pwHtml.toLowerCase().includes("cf-browser-verification");
+
+            if (isBlocked) {
+              db.updateStatus(userId, true, progress, `Bypassing Cloudflare (attempt ${attemptNumber}): ${url}`).catch(() => {});
+              console.log(`Cloudflare challenge detected for ${url}, waiting for resolution...`);
+
+              // Stage 1: Wait passively for cf-clearance cookie (30s)
+              const cfResolved = await Promise.race([
+                pwPage.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 30000 }).then(() => true).catch(() => false),
+                new Promise<boolean>(r => setTimeout(() => r(false), 30000))
+              ]);
+
+              if (!cfResolved) {
+                // Stage 2: Simulate human interaction more naturally
+                for (let i = 0; i < 5; i++) {
+                  await pwPage.mouse.move(
+                    100 + Math.random() * 700,
+                    100 + Math.random() * 500,
+                    { steps: 5 + Math.floor(Math.random() * 10) }
+                  ).catch(() => {});
+                  await pwPage.waitForTimeout(300 + Math.random() * 500);
+                }
+                await pwPage.mouse.click(350, 300).catch(() => {});
+                await pwPage.waitForTimeout(2000);
+                await pwPage.keyboard.press('PageDown').catch(() => {});
+                await pwPage.waitForTimeout(1500);
+                await pwPage.keyboard.press('PageUp').catch(() => {});
+                await pwPage.waitForTimeout(1000);
+
+                // Check again after interaction
+                const cfResolved2 = await Promise.race([
+                  pwPage.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 15000 }).then(() => true).catch(() => false),
+                  new Promise<boolean>(r => setTimeout(() => r(false), 15000))
+                ]);
+
+                if (!cfResolved2) {
+                  // Stage 3: Try reload with longer wait
+                  console.log(`Cloudflare not resolved yet for ${url}, trying reload...`);
+                  await pwPage.reload({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
+                  await pwPage.waitForTimeout(3000);
+                }
+              }
+
+              // Extract cf-clearance cookie
+              const cfCookies = await pwPage.context().cookies().catch(() => []);
+              const cfClearance = cfCookies.find((c: any) => c.name === 'cf-clearance');
+              if (cfClearance) {
+                const cfDomain = getDomain(url);
+                storeCookies(url, `cf-clearance=${cfClearance.value}`);
+                console.log(`Stored cf-clearance cookie for ${cfDomain}`);
+                // Also store all other cookies for the domain
+                for (const c of cfCookies) {
+                  if (c.name !== 'cf-clearance' && c.name !== '__cf_bm') {
+                    storeCookies(url, `${c.name}=${c.value}`);
+                  }
+                }
+              }
+
+              // Reload and get content after challenge resolution
+              await pwPage.reload({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
+              await pwPage.waitForTimeout(1000);
+            }
+
+            if (currentDepth === 0 && !quick) {
+              await pwPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2)).catch(() => {});
+              await pwPage.waitForTimeout(300);
+              await pwPage.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+            }
+
+            finalUrl = pwPage.url();
+            htmlContent = await Promise.race([
+              pwPage.content(),
+              new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Playwright content timeout")), 15000))
+            ]);
+            headersMap = (await resp?.allHeaders()) || {};
+            if (resp) headersMap["x-actual-status"] = resp.status().toString();
+            browserLastUsed = Date.now();
+            updateProfile(url, 'playwright');
+
+            const finalUrlKey = finalUrl.replace(/\/$/, "").toLowerCase();
+            visited.add(finalUrlKey);
+            visited.add(finalUrlKey.replace(/^https?:\/\/(www\.)?/, ""));
+            succeeded = true;
+          }
+        } catch (pwErr: any) {
+          console.error(`Playwright attempt ${attemptNumber} failed for ${url}:`, pwErr.message);
+          lastErrorMessage = pwErr.message || "Playwright error";
+        } finally {
+          if (pwPage) {
+            try { await pwPage.context().close().catch(() => {}); } catch {}
+            try { await pwPage.close().catch(() => {}); } catch {}
+          }
+          activePlaywrights--;
+        }
+        return succeeded;
       }
 
-      // Tier 3: FlareSolverr — open source Cloudflare bypass (free, self-hosted)
-      if (!htmlContent && process.env.FLARESOLVERR_URL) {
+      if (shouldTryPlaywright) {
+        // First attempt
+        let pwSuccess = await tryPlaywright(1);
+        // Retry with fresh context if first attempt got blocked or failed
+        if (!pwSuccess && !htmlContent) {
+          console.log(`Retrying Playwright for ${url} with fresh context...`);
+          await new Promise(r => setTimeout(r, 500));
+          pwSuccess = await tryPlaywright(2);
+        }
+        if (!pwSuccess) {
+          console.log(`Playwright failed for ${url} after 2 attempts`);
+        }
+      }
+
+      // Tier 3: FlareSolverr — NOT USED (removed — crashes on free Render)
         try {
           db.updateStatus(userId, true, progress, `FlareSolverr bypass: ${url}`).catch(() => {});
           const flareUrl = `${process.env.FLARESOLVERR_URL}/v1`;
