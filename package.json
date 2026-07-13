@@ -28,7 +28,7 @@
     "jspdf-autotable": "^5.0.7",
     "localtunnel": "^2.0.2",
     "lucide-react": "^0.546.0",
-    "framer-motion": "^11.18.0",
+    "motion": "^12.38.0",
     "node-fetch": "^3.3.2",
     "tsx": "^4.23.0",
     "openai": "^6.35.0",

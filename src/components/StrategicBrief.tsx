@@ -13,7 +13,7 @@ import {
   BrainCog,
   Brain
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { SEOPage, AuditStats } from '../types/seo';
 import { cn } from '../lib/utils';
 
