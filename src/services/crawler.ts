@@ -388,47 +388,15 @@ export async function audit(startUrl: string, config: AuditConfig) {
         lastErrorMessage = e.message || "Fetch failed";
       }
 
-      // Tier 2: ScraperAPI — activates on first fetch failure when key is set
-      if (!htmlContent && process.env.SCRAPER_API_KEY) {
-        const domain = getDomain(url);
-        if (!scraperDomains.has(domain)) {
-          capSet(scraperDomains);
-          scraperDomains.add(domain);
-        }
-      }
-      if (!htmlContent && process.env.SCRAPER_API_KEY && scraperDomains.has(getDomain(url))) {
-        try {
-          const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true`;
-          const ac = new AbortController();
-          const t = setTimeout(() => ac.abort(), SCRAPER_TIMEOUT_MS);
-          const scraperRes = await fetch(scraperUrl, { signal: ac.signal }).catch(() => null);
-          clearTimeout(t);
-          if (scraperRes?.ok) {
-            const text = await scraperRes.text().catch(() => '');
-            if (text.length > 50) {
-              htmlContent = text;
-              finalUrl = url;
-              headersMap['x-actual-status'] = scraperRes.status.toString();
-              headersMap['x-via'] = 'scraperapi';
-              updateProfile(url, 'fetch', 0, 0);
-              db.updateStatus(userId, true, progress, `ScraperAPI bypass: ${url}`).catch(() => {});
-            }
-          } else if (scraperRes) {
-            console.error(`ScraperAPI returned ${scraperRes.status} for ${url}`);
-          }
-        } catch (e: any) {
-          console.error(`ScraperAPI failed for ${url}:`, e.message);
-        }
-      }
-
+      // Tier 2: Playwright — bot protection bypass (runs before ScraperAPI)
       // Fallback to Playwright ONLY if:
       // 1. Fetch completely failed (no content at all)
-      // 2. AND it's the root page (depth 0) — subpages skip Playwright entirely
-      // 3. AND not in quick mode
+      // 2. AND not in quick mode
+      // 3. AND ScraperAPI didn't already resolve it
       const isLikelySPA = !htmlContent || (htmlContent.length < 800 && htmlContent.toLowerCase().includes('<script') && !htmlContent.toLowerCase().includes('<body'));
       const isBlocked403 = !htmlContent && (lastErrorMessage.includes('403') || lastErrorMessage.toLowerCase().includes('cloudflare') || lastErrorMessage.toLowerCase().includes('block'));
       // Only use Playwright if ScraperAPI didn't already resolve it
-      const shouldTryPlaywright = !quick && (isLikelySPA || isBlocked403) && currentDepth === 0 && !headersMap['x-via'];
+      const shouldTryPlaywright = !quick && (isLikelySPA || isBlocked403) && !headersMap['x-via'];
 
       if (shouldTryPlaywright) {
           // Wait if too many Playwright instances are running to prevent memory crashes
@@ -605,6 +573,39 @@ try {
           } finally {
             activePlaywrights--;
           }
+      }
+
+      // Tier 3: ScraperAPI — last resort, only if Playwright also failed
+      if (!htmlContent && process.env.SCRAPER_API_KEY) {
+        const domain = getDomain(url);
+        if (!scraperDomains.has(domain)) {
+          capSet(scraperDomains);
+          scraperDomains.add(domain);
+        }
+      }
+      if (!htmlContent && process.env.SCRAPER_API_KEY && scraperDomains.has(getDomain(url))) {
+        try {
+          const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true`;
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), SCRAPER_TIMEOUT_MS);
+          const scraperRes = await fetch(scraperUrl, { signal: ac.signal }).catch(() => null);
+          clearTimeout(t);
+          if (scraperRes?.ok) {
+            const text = await scraperRes.text().catch(() => '');
+            if (text.length > 50) {
+              htmlContent = text;
+              finalUrl = url;
+              headersMap['x-actual-status'] = scraperRes.status.toString();
+              headersMap['x-via'] = 'scraperapi';
+              updateProfile(url, 'fetch', 0, 0);
+              db.updateStatus(userId, true, progress, `ScraperAPI bypass: ${url}`).catch(() => {});
+            }
+          } else if (scraperRes) {
+            console.error(`ScraperAPI returned ${scraperRes.status} for ${url}`);
+          }
+        } catch (e: any) {
+          console.error(`ScraperAPI failed for ${url}:`, e.message);
+        }
       }
     } catch (e: any) {
       console.error(`Outer crawl logic failed for ${url}:`, e.message);
