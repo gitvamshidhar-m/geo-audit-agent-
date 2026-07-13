@@ -13,7 +13,6 @@ import {
   BrainCog,
   Brain
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { SEOPage, AuditStats } from '../types/seo';
 import { cn } from '../lib/utils';
 
@@ -301,10 +300,8 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                        <span className="text-slate-900">{item.value}%</span>
                     </div>
                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                       <motion.div 
-                         initial={{ width: 0 }}
+                       <div
                          animate={{ width: `${item.value}%` }}
-                         transition={{ duration: 1, delay: i * 0.1 }}
                          className={`h-full bg-${item.color}-500 shadow-sm`} 
                        />
                     </div>
@@ -338,11 +335,8 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
 
             <div className="grid grid-cols-10 md:grid-cols-20 gap-1.5">
                {pages.slice(0, 100).map((page, i) => (
-                 <motion.div 
+                 <div 
                    key={i}
-                   initial={{ opacity: 0, scale: 0 }}
-                   animate={{ opacity: 1, scale: 1 }}
-                   transition={{ delay: i * 0.005 }}
                    className={cn(
                      "aspect-square rounded-sm border border-black/5",
                      page.score >= 90 ? "bg-emerald-500" : page.score >= 70 ? "bg-amber-400" : "bg-rose-500"
@@ -388,10 +382,8 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                      <span className="text-emerald-400">Achievable in 30 Days</span>
                   </div>
                   <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                     <motion.div 
-                        initial={{ width: 0 }}
+                     <div
                         whileInView={{ width: '75%' }}
-                        transition={{ duration: 1.5, ease: "easeOut" }}
                         className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"
                      />
                   </div>
@@ -424,10 +416,8 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                     <span className="text-sm font-black text-slate-900">{metric.value}%</span>
                  </div>
                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
+                    <div
                       whileInView={{ width: `${metric.value}%` }}
-                      transition={{ duration: 1, delay: i * 0.1 }}
                       className={`h-full bg-${metric.color}-500 shadow-sm`}
                     />
                  </div>
@@ -572,20 +562,14 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
       </div>
 
       {/* Expanded Deck Modal */}
-      <AnimatePresence>
+      
         {isDeckExpanded && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
-             <motion.div 
-               initial={{ opacity: 0 }}
-               animate={{ opacity: 1 }}
-               exit={{ opacity: 0 }}
+             <div
                onClick={() => setIsDeckExpanded(false)}
                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
              />
-             <motion.div 
-               initial={{ opacity: 0, scale: 0.95, y: 20 }}
-               animate={{ opacity: 1, scale: 1, y: 0 }}
-               exit={{ opacity: 0, scale: 0.95, y: 20 }}
+             <div
                className="relative bg-white w-full max-w-5xl max-h-[85vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col"
              >
               <div className="p-8 md:p-10 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
@@ -612,11 +596,8 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                            {directivesByCategory[category].map((item: any, i: number) => (
-                             <motion.div 
+                             <div 
                                key={i}
-                               initial={{ opacity: 0, y: 10 }}
-                               animate={{ opacity: 1, y: 0 }}
-                               transition={{ delay: i * 0.05 }}
                                className="p-6 bg-slate-50 border border-slate-100 rounded-3xl hover:border-blue-200 hover:bg-white transition-all group flex flex-col justify-between"
                              >
                                 <div>
@@ -635,7 +616,7 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic tracking-tighter">Execution Vector: Ready</span>
                                 </div>
-                             </motion.div>
+                             </div>
                            ))}
                         </div>
                      </div>
@@ -662,10 +643,10 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                     </button>
                  </div>
               </div>
-           </motion.div>
+           </div>
         </div>
       )}
-      </AnimatePresence>
+      
     </div>
   );
 }

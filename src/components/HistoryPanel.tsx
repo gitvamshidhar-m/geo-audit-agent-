@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
 import { History, TrendingUp, TrendingDown, Minus, ExternalLink, BarChart3, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
@@ -126,11 +125,8 @@ export function HistoryPanel({ apiFetch, onLoadAudit }: HistoryPanelProps) {
           const trend = getTrend(avgScore, prevScore);
 
           return (
-            <motion.div
+            <div
               key={entry.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
               className={`rounded-xl border p-4 ${getScoreBg(avgScore)} hover:shadow-md transition-shadow`}
             >
               <div className="flex items-center justify-between">
@@ -159,7 +155,7 @@ export function HistoryPanel({ apiFetch, onLoadAudit }: HistoryPanelProps) {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>

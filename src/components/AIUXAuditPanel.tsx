@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
   HelpCircle, 
@@ -732,10 +731,8 @@ export function AIUXAuditPanel({ pages = [], selectedPageUrl, onPageSelect }: AI
                   {journeyStepsLog.map((step, idx) => {
                     const isFrictionAlert = step.frictionPoints !== 'Optimal';
                     return (
-                      <motion.div
+                      <div
                         key={idx}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
                         className={cn(
                           "p-4 border rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 relative overflow-hidden",
                           isFrictionAlert ? "bg-rose-50/50 border-rose-200 text-rose-800" : "bg-emerald-50/50 border-emerald-250 text-emerald-800"
@@ -765,7 +762,7 @@ export function AIUXAuditPanel({ pages = [], selectedPageUrl, onPageSelect }: AI
                             {step.frictionPoints}
                           </span>
                         </div>
-                      </motion.div>
+                      </div>
                     );
                   })}
 

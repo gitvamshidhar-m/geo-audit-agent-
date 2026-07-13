@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { AIInsightData } from '../types/seo';
 import { Megaphone, Users, MessageSquare, TrendingUp, Target, Briefcase, BarChart2 } from 'lucide-react';
 
@@ -75,11 +74,8 @@ export function MarketIntelligencePanel({ insight, isGeneratingAI, onRegenerateA
         </div>
         <div className="grid md:grid-cols-3 gap-6">
           {marketIntel.targetAudienceGaps.map((gap, i) => (
-            <motion.div 
+            <div 
               key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
               className="bg-slate-50 border border-slate-100 p-6 rounded-3xl"
             >
               <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-orange-500 font-black mb-4 shadow-sm">
@@ -88,7 +84,7 @@ export function MarketIntelligencePanel({ insight, isGeneratingAI, onRegenerateA
               <p className="text-sm text-slate-700 font-bold leading-relaxed">
                 "{gap}"
               </p>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -109,11 +105,8 @@ export function MarketIntelligencePanel({ insight, isGeneratingAI, onRegenerateA
 
         <div className="grid lg:grid-cols-2 gap-8 relative">
           {marketIntel.messagingRefinements.map((ref, i) => (
-            <motion.div
+            <div
               key={i}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.15 }}
               className="group"
             >
               <div className="bg-slate-800 border border-slate-700 rounded-[32px] overflow-hidden flex flex-col h-full hover:border-slate-600 transition-colors">
@@ -138,7 +131,7 @@ export function MarketIntelligencePanel({ insight, isGeneratingAI, onRegenerateA
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -157,11 +150,8 @@ export function MarketIntelligencePanel({ insight, isGeneratingAI, onRegenerateA
 
         <div className="space-y-4">
           {marketIntel.campaignOpportunities?.map((campaign, i) => (
-            <motion.div 
+            <div 
               key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
               className="flex flex-col md:flex-row md:items-center gap-6 bg-slate-50 border border-slate-100 p-6 rounded-[32px] hover:shadow-md transition-all hover:bg-white"
             >
               <div className="flex-1">
@@ -190,7 +180,7 @@ export function MarketIntelligencePanel({ insight, isGeneratingAI, onRegenerateA
                   {campaign.expectedOutcome}
                 </div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>

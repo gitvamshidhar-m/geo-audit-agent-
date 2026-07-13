@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldAlert, 
   ShieldCheck, 
@@ -826,12 +825,9 @@ function sanitizeAndWrapQuery(userQuery) {
                   </button>
 
                   {/* Log Telemetry Screen */}
-                  <AnimatePresence>
+                  
                     {testLog.length > 0 && (
-                      <motion.div 
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
+                      <div
                         className="space-y-2 pt-2 border-t border-slate-100"
                       >
                         <div className="bg-slate-900 border border-slate-950 p-3 rounded-xl font-mono text-[9px] text-emerald-400 space-y-1 overflow-y-auto max-h-[140px] leading-relaxed shadow-inner">
@@ -845,16 +841,14 @@ function sanitizeAndWrapQuery(userQuery) {
                             </div>
                           )}
                         </div>
-                      </motion.div>
+                      </div>
                     )}
-                  </AnimatePresence>
+                  
 
                   {/* Penetration Results Card */}
-                  <AnimatePresence>
+                  
                     {simulationResult && !isSimulating && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
+                      <div
                         className={cn(
                           "p-4 border rounded-2xl flex flex-col gap-3 relative overflow-hidden",
                           simulationResult.status === 'COMPROMISED' ? 'bg-rose-50/70 border-rose-200 text-rose-800' :
@@ -888,9 +882,9 @@ function sanitizeAndWrapQuery(userQuery) {
                             ))}
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
                     )}
-                  </AnimatePresence>
+                  
                 </>
               ) : (
                 <>
@@ -994,12 +988,9 @@ function sanitizeAndWrapQuery(userQuery) {
                   </button>
 
                   {/* MCP Console Logs */}
-                  <AnimatePresence>
+                  
                     {mcpExecutionLog.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
+                      <div
                         className="space-y-1.5 pt-2 border-t border-slate-100"
                       >
                         <span className="text-[8px] font-bold uppercase text-slate-400 tracking-wider font-mono">Connection Exchange Stream</span>
@@ -1022,16 +1013,14 @@ function sanitizeAndWrapQuery(userQuery) {
                             </div>
                           )}
                         </div>
-                      </motion.div>
+                      </div>
                     )}
-                  </AnimatePresence>
+                  
 
                   {/* MCP JSON returned Result Panel */}
-                  <AnimatePresence>
+                  
                     {mcpResult && !isMcpExecuting && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
+                      <div
                         className="p-4 border border-indigo-100 rounded-2xl bg-indigo-50/10 text-slate-800 space-y-2 relative overflow-hidden"
                       >
                         <div className="flex items-center justify-between border-b border-indigo-55 pb-2">
@@ -1044,9 +1033,9 @@ function sanitizeAndWrapQuery(userQuery) {
                         <pre className="text-[9px] font-mono leading-relaxed bg-slate-900 text-emerald-400 p-3 rounded-xl overflow-x-auto max-h-[220px]">
                           <code>{JSON.stringify(mcpResult, null, 2)}</code>
                         </pre>
-                      </motion.div>
+                      </div>
                     )}
-                  </AnimatePresence>
+                  
                 </>
               )}
             </div>

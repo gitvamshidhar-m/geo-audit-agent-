@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
   Settings, 
@@ -630,12 +629,9 @@ export function SEOCheckPanel({ pages = [], selectedPageUrl, onPageSelect }: SEO
             </div>
 
             {/* Tab content listings */}
-            <AnimatePresence mode="wait">
-              <motion.div
+            
+              <div
                 key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
                 className="space-y-6"
               >
                 {activeTab !== 'sandbox' ? (
@@ -774,8 +770,8 @@ export function SEOCheckPanel({ pages = [], selectedPageUrl, onPageSelect }: SEO
                     </div>
                   </div>
                 )}
-              </motion.div>
-            </AnimatePresence>
+              </div>
+            
           </div>
         </div>
       )}

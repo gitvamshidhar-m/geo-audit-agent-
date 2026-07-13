@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
   RefreshCw, 
@@ -141,11 +140,6 @@ function NeuralNetworkBackground() {
               cy: [`${Math.random() * 100}%`, `${Math.random() * 100}%`, `${Math.random() * 100}%`],
               opacity: [0.1, 0.4, 0.1]
             }}
-            transition={{
-              duration: 20 + Math.random() * 30,
-              repeat: Infinity,
-              ease: "linear"
-            }}
           />
         ))}
       </svg>
@@ -174,9 +168,7 @@ function SemanticNeuralGraph({ items, title, subtitle }: { items: string[], titl
 
         <div className="flex-1 relative flex items-center justify-center">
           {/* Centrally animated core */}
-          <motion.div 
-            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 4, repeat: Infinity }}
+          <div
             className="absolute w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"
           />
           
@@ -189,10 +181,7 @@ function SemanticNeuralGraph({ items, title, subtitle }: { items: string[], titl
               return (
                 <React.Fragment key={i}>
                   {/* Connection lines to center */}
-                  <motion.div 
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{ delay: i * 0.1 }}
+                  <div
                     className="absolute top-1/2 left-1/2 h-[1px] bg-blue-500/20 origin-left"
                     style={{ 
                       width: '30%', 
@@ -200,10 +189,7 @@ function SemanticNeuralGraph({ items, title, subtitle }: { items: string[], titl
                     }}
                   />
                   
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.1, type: "spring" }}
+                  <div
                     className="absolute p-3 rounded-2xl bg-slate-800 border border-slate-700 shadow-xl cursor-default hover:border-blue-500 transition-colors group/node max-w-[150px]"
                     style={{ 
                       left: `${x}%`, 
@@ -219,7 +205,7 @@ function SemanticNeuralGraph({ items, title, subtitle }: { items: string[], titl
                     <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[8px] font-black uppercase px-2 py-1 rounded opacity-0 group-hover/node:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-lg">
                       Authority Weight: {Math.floor(Math.random() * 40 + 60)}%
                     </div>
-                  </motion.div>
+                  </div>
                 </React.Fragment>
               );
             })}
@@ -231,10 +217,8 @@ function SemanticNeuralGraph({ items, title, subtitle }: { items: string[], titl
               <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Active Sync</span>
               <div className="flex gap-1">
                  {[...Array(3)].map((_, i) => (
-                   <motion.div 
+                   <div 
                     key={i}
-                    animate={{ scaleY: [1, 2, 1] }}
-                    transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
                     className="w-0.5 h-1.5 bg-blue-400 rounded-full"
                    />
                  ))}
@@ -630,13 +614,10 @@ export function AIStrategyPanel({
       </div>
 
       <div className="relative z-10">
-        <AnimatePresence mode="wait">
+        
           {activeSubTab === 'strategy' && (
-            <motion.div 
+            <div 
               key="strategy"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
               className="space-y-8 md:space-y-12"
             >
               {isGenerating && !insight ? (
@@ -993,15 +974,12 @@ export function AIStrategyPanel({
                   )}
                 </React.Fragment>
               )}
-            </motion.div>
+            </div>
           )}
 
           {activeSubTab === 'network' && (
-            <motion.div 
+            <div 
               key="network"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.05 }}
               className="space-y-8"
             >
                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1031,8 +1009,7 @@ export function AIStrategyPanel({
                             </div>
                             <div className="flex items-center gap-3">
                                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                  <motion.div 
-                                    initial={{ width: 0 }}
+                                  <div
                                     animate={{ width: `${(p.count / (stats?.totalLinks || 1)) * 1000}%` }}
                                     className="h-full bg-indigo-500"
                                   />
@@ -1093,15 +1070,12 @@ export function AIStrategyPanel({
                      </div>
                   </div>
                </div>
-            </motion.div>
+            </div>
           )}
 
           {activeSubTab === 'entities' && (
-            <motion.div 
+            <div 
               key="entities"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
               className="space-y-8"
             >
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1152,8 +1126,7 @@ export function AIStrategyPanel({
                                 <span className="text-slate-900">{k.count} Pages</span>
                              </div>
                              <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden">
-                                <motion.div 
-                                  initial={{ width: 0 }}
+                                <div
                                   animate={{ width: `${(k.count / pages.length) * 100}%` }}
                                   className="h-full bg-blue-500"
                                 />
@@ -1180,8 +1153,7 @@ export function AIStrategyPanel({
                                    <span>{s.count}</span>
                                 </div>
                                 <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                                   <motion.div 
-                                     initial={{ width: 0 }} 
+                                   <div 
                                      animate={{ width: stats?.totalPages ? `${(s.count / stats.totalPages) * 100}%` : '0%' }} 
                                      className={cn("h-full", s.color)} 
                                    />
@@ -1289,14 +1261,11 @@ export function AIStrategyPanel({
                      </div>
                   </div>
                </div>
-            </motion.div>
+            </div>
           )}
           {activeSubTab === 'geo' && (
-            <motion.div 
+            <div 
               key="geo"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
               className="space-y-12"
             >
               {/* Interactive GEO Audit Tool */}
@@ -1428,11 +1397,9 @@ export function AIStrategyPanel({
               </div>
 
               {/* GEO Audit Results */}
-              <AnimatePresence>
+              
                 {customGeoResult && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
+                  <div
                     className="grid grid-cols-1 lg:grid-cols-12 gap-8"
                   >
                     <div className="lg:col-span-4 space-y-8">
@@ -1443,14 +1410,12 @@ export function AIStrategyPanel({
                           <div className="relative z-10">
                              <div className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-10">Brand Visibility Score (BVS)</div>
                              <div className="flex items-baseline gap-2 mb-10">
-                                <motion.span 
+                                <span 
                                   key={currentBVS}
-                                  initial={{ opacity: 0.5, scale: 0.8 }}
-                                  animate={{ opacity: 1, scale: 1 }}
                                   className="text-8xl font-black italic tracking-tighter shadow-blue-500/20"
                                 >
                                   {currentBVS}
-                                </motion.span>
+                                </span>
                                 <span className="text-blue-400 text-2xl font-bold">/100</span>
                              </div>
                              <p className="text-slate-400 text-xs font-semibold leading-relaxed mb-10 uppercase tracking-wide">
@@ -1563,9 +1528,9 @@ export function AIStrategyPanel({
                           ))}
                        </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
+              
 
                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-1 bg-slate-900 rounded-[48px] p-10 text-white relative overflow-hidden shadow-2xl">
@@ -1585,7 +1550,7 @@ export function AIStrategyPanel({
                                  <span>{stats?.sentimentTrend ? Math.round((stats.sentimentTrend.positive / stats.totalPages) * 100) : 0}%</span>
                               </div>
                               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                 <motion.div initial={{ width: 0 }} animate={{ width: stats?.sentimentTrend ? `${(stats.sentimentTrend.positive / stats.totalPages) * 100}%` : '0%' }} className="h-full bg-emerald-500" />
+                                 <div animate={{ width: stats?.sentimentTrend ? `${(stats.sentimentTrend.positive / stats.totalPages) * 100}%` : '0%' }} className="h-full bg-emerald-500" />
                               </div>
                            </div>
                            <div>
@@ -1594,7 +1559,7 @@ export function AIStrategyPanel({
                                  <span>{stats?.aiRecognitionScore || 0}%</span>
                               </div>
                               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                 <motion.div initial={{ width: 0 }} animate={{ width: `${stats?.aiRecognitionScore || 0}%` }} className="h-full bg-blue-500" />
+                                 <div animate={{ width: `${stats?.aiRecognitionScore || 0}%` }} className="h-full bg-blue-500" />
                               </div>
                            </div>
                         </div>
@@ -1677,9 +1642,9 @@ export function AIStrategyPanel({
                     </div>
                  </div>
                )}
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        
 
         {isData && typeof insight === 'object' && activeSubTab === 'strategy' && (
           <section className="mt-12 bg-white border border-slate-200 p-8 md:p-12 rounded-[48px] shadow-xl relative overflow-hidden animate-in fade-in slide-in-from-bottom-4">

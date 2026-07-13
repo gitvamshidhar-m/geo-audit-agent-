@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart, 
   TrendingUp, 
@@ -373,12 +372,9 @@ export function AIBenchmarkPanel({ pages = [], selectedPageUrl, targetDomain }: 
       </div>
 
       {/* Add Competitor Dialog Inline */}
-      <AnimatePresence>
+      
         {isAdding && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
+          <div
             className="p-6 border border-slate-200 rounded-3xl bg-slate-50 relative overflow-hidden"
           >
             <form onSubmit={handleAddCompetitor} className="space-y-6">
@@ -503,9 +499,9 @@ export function AIBenchmarkPanel({ pages = [], selectedPageUrl, targetDomain }: 
                 </button>
               </div>
             </form>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* LEFT: Multi-competitor visual radar comparison chart & notes (8 cols) */}

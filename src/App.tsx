@@ -54,7 +54,6 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 interface SaaSUser {
   userId: string;
 }
@@ -112,7 +111,7 @@ function SidebarLink({ active, onClick, icon, label, collapsed }: { active: bool
       </div>
       {!collapsed && <span>{label}</span>}
       {active && (
-        <motion.div 
+        <div 
           layoutId="active-indicator"
           className="absolute left-0 w-1 h-6 bg-blue-600 rounded-r-full"
         />
@@ -1093,9 +1092,9 @@ export default function App() {
         <main 
           className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth"
         >
-          <AnimatePresence mode="wait">
+          
             {!stats && activeTab === 'overview' && (
-              <motion.div key="welcome" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-3xl mx-auto text-center py-20">
+              <div key="welcome" className="max-w-3xl mx-auto text-center py-20">
                 <div className="w-20 h-20 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-8">
                   <Search size={36} className="text-blue-600" />
                 </div>
@@ -1109,14 +1108,11 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-              </motion.div>
+              </div>
             )}
             {stats && activeTab === 'overview' && (
-              <motion.div 
+              <div 
                 key="overview"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
                 className="max-w-[1600px] mx-auto space-y-8"
               >
                 <div className="flex justify-between items-end border-b border-slate-200 pb-8">
@@ -1855,14 +1851,12 @@ export default function App() {
                     </div>
                   </div>
                 )}
-              </motion.div>
+              </div>
             )}
 
             {activeTab === 'pages' && (
-              <motion.div 
+              <div 
                 key="pages"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
                 className="bg-white border focus-within:border-blue-500/50 border-slate-200 rounded-[32px] shadow-2xl overflow-hidden max-w-[1600px] mx-auto transition-all"
               >
                 <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white overflow-hidden">
@@ -1911,9 +1905,7 @@ export default function App() {
                     <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-slate-900 to-transparent z-10" />
                     <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-slate-900 to-transparent z-10" />
                     
-                    <motion.div 
-                      animate={{ x: [0, -1000] }}
-                      transition={{ repeat: Infinity, ease: "linear", duration: 20 }}
+                    <div
                       className="flex items-center gap-8 whitespace-nowrap px-4 w-max"
                     >
                       {[...Array(4)].map((_, i) => (
@@ -1945,7 +1937,7 @@ export default function App() {
                           </div>
                         </div>
                       ))}
-                    </motion.div>
+                    </div>
                   </div>
                 )}
 
@@ -2145,16 +2137,13 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {activeTab === 'ai' && <AIAssistant pages={pages} aiProvider={aiProvider} setAiProvider={setAiProvider} apiKeys={apiKeys} />}
             {activeTab === 'strategy' && (
-              <motion.div
+              <div
                 key="strategy"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2174,14 +2163,11 @@ export default function App() {
                     agentProgress={agentProgress}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'brief' && (
-              <motion.div
+              <div
                 key="brief"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-5xl mx-auto">
@@ -2196,14 +2182,11 @@ export default function App() {
                     agentProgress={agentProgress}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'experimentation' && (
-              <motion.div
+              <div
                 key="experimentation"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2217,14 +2200,11 @@ export default function App() {
                     aiProvider={aiProvider}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'market' && (
-              <motion.div
+              <div
                 key="market"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2235,14 +2215,11 @@ export default function App() {
                     agentProgress={agentProgress}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'compare' && (
-              <motion.div
+              <div
                 key="compare"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto space-y-6">
@@ -2314,10 +2291,10 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'competitors' && (
-              <motion.div key="competitors" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="w-full">
+              <div key="competitors" className="w-full">
                 <div className="max-w-7xl mx-auto space-y-6">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-6">
                     <div className="flex items-center gap-3">
@@ -2390,40 +2367,31 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'crux' && (
-              <motion.div
+              <div
                 key="crux-panel"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
                   <CruxTab url={url} />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'promptfoo' && (
-              <motion.div
+              <div
                 key="promptfoo-panel"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
                   <PromptfooPanel apiKeys={apiKeys} />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'history' && (
-              <motion.div
+              <div
                 key="history-panel"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2432,14 +2400,11 @@ export default function App() {
                     onLoadAudit={(auditUrl) => { setUrl(auditUrl); startAudit(auditUrl); }}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'scoring-model' && (
-              <motion.div
+              <div
                 key="scoring-model"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2452,14 +2417,11 @@ export default function App() {
                     }}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'security-risk' && (
-              <motion.div
+              <div
                 key="security-risk"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2471,14 +2433,11 @@ export default function App() {
                     }}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'ai-benchmark' && (
-              <motion.div
+              <div
                 key="ai-benchmark"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2488,14 +2447,11 @@ export default function App() {
                     targetDomain={url}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'ai-ux-audit' && (
-              <motion.div
+              <div
                 key="ai-ux-audit"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2507,14 +2463,11 @@ export default function App() {
                     }}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'enterprise-audit' && (
-              <motion.div
+              <div
                 key="enterprise-audit"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2526,14 +2479,11 @@ export default function App() {
                     }}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
             {activeTab === 'seo-check' && (
-              <motion.div
+              <div
                 key="seo-check"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
                 className="w-full"
               >
                 <div className="max-w-7xl mx-auto">
@@ -2545,28 +2495,21 @@ export default function App() {
                     }}
                   />
                 </div>
-              </motion.div>
+              </div>
             )}
-          </AnimatePresence>
+          
         </main>
       </div>
 
       {/* Page Detail Panel - Geometric Design */}
-      <AnimatePresence>
+      
         {selectedPage && (
           <div className="fixed inset-0 z-[100] flex justify-end">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+            <div
               onClick={() => setSelectedPage(null)}
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
             />
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.3 }}
+            <div
               className="relative w-full max-w-xl bg-white h-full shadow-2xl p-10 overflow-y-auto border-l border-slate-200"
             >
               <div className="mb-12 flex justify-between items-start">
@@ -2662,18 +2605,13 @@ export default function App() {
                       {isScanningPlagiarism ? (
                         <div className="space-y-3 py-1">
                           <div className="flex items-center gap-3">
-                            <motion.div 
-                              animate={{ rotate: 360 }} 
-                              transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                            <div
                               className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full" 
                             />
                             <div className="text-xs font-semibold text-slate-700 animate-pulse">Running Deep Neural Scanner...</div>
                           </div>
                           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <motion.div 
-                              initial={{ width: "10%" }}
-                              animate={{ width: ["10%", "45%", "80%", "98%"] }}
-                              transition={{ duration: 12, repeat: Infinity, repeatType: "reverse" }}
+                            <div
                               className="h-full bg-indigo-600 rounded-full" 
                             />
                           </div>
@@ -3293,26 +3231,20 @@ export default function App() {
                   </div>
                 </section>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
+      
 
       {/* Comparison Modal */}
-      <AnimatePresence>
+      
         {isComparing && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 md:p-12">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+            <div
               onClick={() => setIsComparing(false)}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" 
             />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+            <div
               className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
               <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -3363,26 +3295,20 @@ export default function App() {
                   Exit Comparison
                 </button>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
+      
 
       {/* Settings Modal */}
-      <AnimatePresence>
+      
         {showSettings && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
+            <div
               onClick={() => setShowSettings(false)}
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
             />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            <div
               className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
             >
               <div className="p-8">
@@ -3546,10 +3472,10 @@ export default function App() {
                     </button>
                   </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
+      
 
 
     </div>
@@ -4333,9 +4259,7 @@ function DomainCheckItem({ label, status, desc }: { label: string, status: boole
       </div>
       <div className={cn("text-xs font-bold uppercase tracking-tight", status ? "text-white" : "text-slate-400")}>{desc}</div>
       <div className="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-        <motion.div 
-          initial={{ scaleX: 0 }} 
-          animate={{ scaleX: status ? 1 : 0.3 }} 
+        <div 
           className={cn("h-full origin-left", status ? "bg-emerald-500" : "bg-rose-500")} 
         />
       </div>
@@ -4462,10 +4386,8 @@ function MetricCard({ label, value, sub, color }: { label: string, value: string
         </div>
         {style.hasProgress && (
           <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
+            <div
               animate={{ width: `${Math.max(0, Math.min(100, style.progressVal || 0))}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
               className={cn("h-full rounded-full", style.indicatorColor)}
             />
           </div>

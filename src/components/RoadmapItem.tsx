@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -26,10 +25,8 @@ export function RoadmapItem({ item, index }: { item: any; index: number }) {
   if (!item) return null;
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, x: -20 }}
+    <div
       whileInView={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.1 }}
       className="flex flex-col md:flex-row gap-6 md:gap-8 p-8 md:p-10 rounded-[48px] bg-white/[0.04] border border-white/5 hover:border-blue-500/40 hover:bg-white/[0.07] transition-all group/item backdrop-blur-md relative"
     >
       <div className="flex flex-row md:flex-col items-center justify-between md:justify-start shrink-0">
@@ -94,12 +91,9 @@ export function RoadmapItem({ item, index }: { item: any; index: number }) {
           )}
         </div>
 
-        <AnimatePresence>
+        
           {isExpanded && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
+            <div
               className="mt-6 pt-6 border-t border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-hidden"
             >
                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
@@ -116,14 +110,14 @@ export function RoadmapItem({ item, index }: { item: any; index: number }) {
                  </div>
                  <div className="text-xs text-slate-300 font-medium">Estimated visibility uplift: +24% within 60 days.</div>
                </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        
       </div>
 
       <div className="absolute top-8 right-8 opacity-0 group-hover/item:opacity-100 transition-opacity">
          <Layers size={40} className="text-blue-500/10" />
       </div>
-    </motion.div>
+    </div>
   );
 }

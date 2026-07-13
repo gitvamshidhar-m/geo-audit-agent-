@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
   RefreshCw, 
@@ -159,9 +158,7 @@ export function AIAssistant({ pages, aiProvider, setAiProvider, apiKeys }: {
       </div>
 
       {response && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+        <div
           className="bg-[#0f172a] text-white rounded-[40px] p-8 md:p-12 shadow-2xl relative overflow-hidden group/response border border-slate-800"
         >
           <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
@@ -236,13 +233,9 @@ export function AIAssistant({ pages, aiProvider, setAiProvider, apiKeys }: {
                 </div>
               </button>
 
-              <AnimatePresence>
+              
                 {showRAGInspector && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3 }}
+                  <div
                     className="overflow-hidden mt-4 space-y-3"
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -290,9 +283,9 @@ export function AIAssistant({ pages, aiProvider, setAiProvider, apiKeys }: {
                         </div>
                       ))}
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
+              
             </div>
           )}
 
@@ -308,7 +301,7 @@ export function AIAssistant({ pages, aiProvider, setAiProvider, apiKeys }: {
                Export Fragment
              </button>
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );

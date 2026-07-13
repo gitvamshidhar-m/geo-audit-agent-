@@ -18,7 +18,6 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   PromptfooTestCase, 
   PromptfooResult, 
@@ -363,13 +362,10 @@ export function PromptfooPanel({ apiKeys }: PromptfooPanelProps) {
       )}
 
       {/* Main Grid Content */}
-      <AnimatePresence mode="wait">
+      
         {activeTab === 'config' && (
-          <motion.div
+          <div
             key="config-tab"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
             className="grid grid-cols-1 lg:grid-cols-12 gap-8"
           >
             {/* Left Box: Prompts configuration (4 cols) */}
@@ -559,15 +555,12 @@ export function PromptfooPanel({ apiKeys }: PromptfooPanelProps) {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
 
         {activeTab === 'results' && (
-          <motion.div
+          <div
             key="results-tab"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
             className="space-y-6"
           >
             {isEvaluating ? (
@@ -726,9 +719,9 @@ export function PromptfooPanel({ apiKeys }: PromptfooPanelProps) {
                 </div>
               </div>
             )}
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      
     </div>
   );
 }

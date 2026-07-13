@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { SEOPage, AIInsightData } from '../types/seo';
 import { cn } from '../lib/utils';
@@ -658,11 +657,8 @@ Incorporate and reference the dynamic RAG pipeline vectors from the current inde
 
             <div className="grid md:grid-cols-2 gap-6 relative">
               {legacyStrategies.hypotheses.map((hyp, i) => (
-                <motion.div 
+                <div 
                   key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
                   className="bg-slate-50 border border-slate-100 p-6 rounded-3xl"
                 >
                   <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 font-mono flex items-center justify-between">
@@ -679,7 +675,7 @@ Incorporate and reference the dynamic RAG pipeline vectors from the current inde
                   <p className="text-[14px] text-slate-900 font-bold leading-relaxed italic bg-white p-4 rounded-xl border border-slate-100">
                     "{hyp.hypothesis}"
                   </p>
-                </motion.div>
+                </div>
               ))}
             </div>
           </section>
@@ -700,11 +696,8 @@ Incorporate and reference the dynamic RAG pipeline vectors from the current inde
 
             <div className="space-y-4">
               {legacyStrategies.abTests.map((test, i) => (
-                <motion.div 
+                <div 
                   key={i}
-                  initial={{ opacity: 0, x: -25 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
                   className="group bg-slate-800/50 border border-slate-700/50 p-6 rounded-[32px] hover:bg-slate-800 transition-colors flex flex-col md:flex-row md:items-center gap-6"
                 >
                   <div className="flex-1">
@@ -734,7 +727,7 @@ Incorporate and reference the dynamic RAG pipeline vectors from the current inde
                       Effort: {test.difficulty}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               ))}
             </div>
           </section>
@@ -979,12 +972,9 @@ Incorporate and reference the dynamic RAG pipeline vectors from the current inde
             </div>
 
             {/* Steps feedback display */}
-            <AnimatePresence>
+            
               {isGeneratingReport && reportProgress && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                <div
                   className="mt-6 border-t border-slate-100 pt-6 overflow-hidden"
                 >
                   <div className="flex items-center gap-3 bg-slate-50 border border-slate-150 p-4 rounded-xl">
@@ -993,9 +983,9 @@ Incorporate and reference the dynamic RAG pipeline vectors from the current inde
                       {reportProgress}
                     </span>
                   </div>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
+            
           </div>
 
           {/* Section 3: Generated Hub View */}
