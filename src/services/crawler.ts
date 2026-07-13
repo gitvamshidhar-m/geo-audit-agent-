@@ -323,7 +323,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
   // Don't await sitemapPromise — crawl starts immediately
 
-  const MAX_PLAYWRIGHTS = isRender ? 1 : 3;
+  const MAX_PLAYWRIGHTS = isRender ? 2 : 3;
   const BROWSER_IDLE_MS = isRender ? 8000 : 15000;
   const SCRAPER_TIMEOUT_MS = isRender ? 15000 : 25000;
 
@@ -589,17 +589,32 @@ try {
 
                 if (isBlocked) {
                   db.updateStatus(userId, true, progress, `Bypassing Cloudflare Challenge: ${url}`).catch(() => {});
-                  // Wait for cf-clearance cookie — Cloudflare JS challenge resolves in ~5s
+                  // Wait for cf-clearance cookie — Cloudflare JS challenge resolves in ~5-10s
                   const cfResolved = await Promise.race([
-                    page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 15000 }).then(() => true).catch(() => false),
-                    new Promise<boolean>(r => setTimeout(() => r(false), 15000))
+                    page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 20000 }).then(() => true).catch(() => false),
+                    new Promise<boolean>(r => setTimeout(() => r(false), 20000))
                   ]);
                   if (!cfResolved) {
-                    // Simulate human interaction as fallback
-                    await page.mouse.move(200 + Math.random() * 300, 200 + Math.random() * 300).catch(() => {});
-                    await page.waitForTimeout(500);
-                    await page.mouse.click(200 + Math.random() * 300, 200 + Math.random() * 300).catch(() => {});
-                    await page.waitForTimeout(2000);
+                    // Simulate human interaction: move mouse, scroll, click
+                    for (let i = 0; i < 3; i++) {
+                      await page.mouse.move(100 + Math.random() * 500, 100 + Math.random() * 400).catch(() => {});
+                      await page.waitForTimeout(200 + Math.random() * 300);
+                    }
+                    await page.mouse.click(300 + Math.random() * 200, 300 + Math.random() * 200).catch(() => {});
+                    await page.waitForTimeout(1000);
+                    // Scroll down and up to trigger more JS execution
+                    await page.evaluate(() => window.scrollTo(0, 500)).catch(() => {});
+                    await page.waitForTimeout(1000);
+                    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+                    await page.waitForTimeout(3000);
+                    // Check again after interaction
+                    const cfResolved2 = await Promise.race([
+                      page.waitForFunction(() => document.cookie.includes('cf-clearance'), { timeout: 10000 }).then(() => true).catch(() => false),
+                      new Promise<boolean>(r => setTimeout(() => r(false), 10000))
+                    ]);
+                    if (!cfResolved2) {
+                      console.log(`Cloudflare challenge NOT resolved for ${url} after interaction`);
+                    }
                   }
                   // Extract cf-clearance and store in cookie jar for future fetch requests
                   const cfCookies = await page.context().cookies().catch(() => []);
