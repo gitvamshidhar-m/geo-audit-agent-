@@ -52,7 +52,8 @@ import {
   ShieldAlert,
   TrendingUp,
   Sun,
-  Moon
+  Moon,
+  History
 } from 'lucide-react';
 interface SaaSUser {
   userId: string;
@@ -112,7 +113,6 @@ function SidebarLink({ active, onClick, icon, label, collapsed }: { active: bool
       {!collapsed && <span>{label}</span>}
       {active && (
         <div 
-          layoutId="active-indicator"
           className="absolute left-0 w-1 h-6 bg-blue-600 rounded-r-full"
         />
       )}
@@ -4387,8 +4387,8 @@ function MetricCard({ label, value, sub, color }: { label: string, value: string
         {style.hasProgress && (
           <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
             <div
-              animate={{ width: `${Math.max(0, Math.min(100, style.progressVal || 0))}%` }}
-              className={cn("h-full rounded-full", style.indicatorColor)}
+              style={{ width: `${Math.max(0, Math.min(100, style.progressVal || 0))}%` }}
+              className={cn("h-full rounded-full transition-all duration-500", style.indicatorColor)}
             />
           </div>
         )}

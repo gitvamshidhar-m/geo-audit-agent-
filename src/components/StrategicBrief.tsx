@@ -301,8 +301,8 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                     </div>
                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                        <div
-                         animate={{ width: `${item.value}%` }}
-                         className={`h-full bg-${item.color}-500 shadow-sm`} 
+                         style={{ width: `${item.value}%` }}
+                         className={`h-full bg-${item.color}-500 shadow-sm transition-all duration-500`} 
                        />
                     </div>
                  </div>

@@ -1,6 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ReactNode } from 'react';
 import { History, TrendingUp, TrendingDown, Minus, ExternalLink, BarChart3, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+
+interface ChartErrorBoundaryProps { children: ReactNode; }
+interface ChartErrorBoundaryState { hasError: boolean; }
+class ChartErrorBoundary extends Component<ChartErrorBoundaryProps, ChartErrorBoundaryState> {
+  state: ChartErrorBoundaryState = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <p className="text-sm text-slate-500">Chart unavailable — recharts compatibility issue.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function ScoreTrendChart({ chartData }: { chartData: any[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+        <Tooltip
+          contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
+          formatter={(value: number) => [`${value}/100`, 'Score']}
+        />
+        <Line type="monotone" dataKey="score" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
 
 interface AuditHistoryEntry {
   id: number;
@@ -96,23 +130,14 @@ export function HistoryPanel({ apiFetch, onLoadAudit }: HistoryPanelProps) {
     <div className="space-y-6">
       {/* Score Trend Chart */}
       {chartData.length > 1 && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
-          <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" /> Score Trend
-          </h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
-                formatter={(value: number) => [`${value}/100`, 'Score']}
-              />
-              <Line type="monotone" dataKey="score" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartErrorBoundary>
+          <div className="bg-white rounded-2xl border border-slate-200 p-6">
+            <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" /> Score Trend
+            </h3>
+            <ScoreTrendChart chartData={chartData} />
+          </div>
+        </ChartErrorBoundary>
       )}
 
       {/* Audit History List */}

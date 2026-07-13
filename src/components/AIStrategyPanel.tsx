@@ -135,11 +135,7 @@ function NeuralNetworkBackground() {
             cy={`${Math.random() * 100}%`}
             r={Math.random() * 4 + 1}
             fill="url(#nodeGradient)"
-            animate={{
-              cx: [`${Math.random() * 100}%`, `${Math.random() * 100}%`, `${Math.random() * 100}%`],
-              cy: [`${Math.random() * 100}%`, `${Math.random() * 100}%`, `${Math.random() * 100}%`],
-              opacity: [0.1, 0.4, 0.1]
-            }}
+            opacity={0.3}
           />
         ))}
       </svg>
@@ -1009,10 +1005,10 @@ export function AIStrategyPanel({
                             </div>
                             <div className="flex items-center gap-3">
                                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                  <div
-                                    animate={{ width: `${(p.count / (stats?.totalLinks || 1)) * 1000}%` }}
-                                    className="h-full bg-indigo-500"
-                                  />
+                                   <div
+                                     style={{ width: `${Math.min(100, (p.count / (stats?.totalLinks || 1)) * 100)}%` }}
+                                     className="h-full bg-indigo-500 transition-all duration-500"
+                                   />
                                </div>
                                <span className="text-[11px] font-black text-slate-900">{p.count} Internal Links</span>
                             </div>
@@ -1126,10 +1122,10 @@ export function AIStrategyPanel({
                                 <span className="text-slate-900">{k.count} Pages</span>
                              </div>
                              <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden">
-                                <div
-                                  animate={{ width: `${(k.count / pages.length) * 100}%` }}
-                                  className="h-full bg-blue-500"
-                                />
+                                 <div
+                                   style={{ width: `${(k.count / pages.length) * 100}%` }}
+                                   className="h-full bg-blue-500 transition-all duration-500"
+                                 />
                              </div>
                           </div>
                        </div>
@@ -1154,8 +1150,8 @@ export function AIStrategyPanel({
                                 </div>
                                 <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
                                    <div 
-                                     animate={{ width: stats?.totalPages ? `${(s.count / stats.totalPages) * 100}%` : '0%' }} 
-                                     className={cn("h-full", s.color)} 
+                                     style={{ width: stats?.totalPages ? `${(s.count / stats.totalPages) * 100}%` : '0%' }} 
+                                     className={cn("h-full transition-all duration-500", s.color)} 
                                    />
                                 </div>
                              </div>
