@@ -68,6 +68,11 @@ async function startServer() {
       next();
     });
 
+    // Health check — lightweight keep-alive endpoint for cron pings
+    app.get("/health", (_req, res) => {
+      res.status(200).json({ status: "ok", uptime: process.uptime() });
+    });
+
     console.log("Initializing database...");
     // Initialize DB
     await db.initDB();
