@@ -22,7 +22,7 @@ import {
   Zap,
   CheckSquare
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SEOPage } from '../types/seo';
 
 interface EnterpriseAuditPanelProps {

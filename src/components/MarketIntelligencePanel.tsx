@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { AIInsightData } from '../types/seo';
 import { Megaphone, Users, MessageSquare, TrendingUp, Target, Briefcase, BarChart2 } from 'lucide-react';
 

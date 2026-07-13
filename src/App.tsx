@@ -54,7 +54,7 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 interface SaaSUser {
   userId: string;
 }
