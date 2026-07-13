@@ -98,14 +98,11 @@ const failurePatterns = new Map<string, number>(); // pattern -> failure count
 const FAILURE_THRESHOLD = 3; // skip pattern after 3 failures
 
 function extractPattern(url: string): string {
-  try {
-    const u = new URL(url);
-    const segments = u.pathname.split('/').filter(Boolean);
-    // Use first 2 path segments as pattern (e.g., /blog/post-slug → /blog/*)
-    if (segments.length >= 2) return `/${segments[0]}/*`;
-    if (segments.length === 1) return `/${segments[0]}/*`;
-    return '/';
-  } catch { return '/'; }
+  const slashIdx = url.indexOf('/', url.indexOf('//') + 2);
+  if (slashIdx === -1) return '/';
+  const path = url.indexOf('?', slashIdx) !== -1 ? url.substring(slashIdx, url.indexOf('?', slashIdx)) : url.substring(slashIdx);
+  const firstSeg = path.indexOf('/', 1) !== -1 ? path.substring(0, path.indexOf('/', 1)) : path;
+  return `${firstSeg}/*`;
 }
 
 function recordFailure(url: string) {
@@ -120,40 +117,44 @@ function isPatternBlocked(url: string): boolean {
 }
 
 // ── Link Priority Scorer ──────────────────────────────────────────────────────
-// Scores URLs so high-value pages get crawled first
+// Fast string-based scoring without URL parsing
 function scoreLink(url: string): number {
-  try {
-    const u = new URL(url);
-    const path = u.pathname.toLowerCase();
-    const segments = path.split('/').filter(Boolean);
-    let score = 100;
+  let score = 100;
+  // Extract path using string ops (no URL constructor)
+  const schemeEnd = url.indexOf('://');
+  const pathStart = schemeEnd !== -1 ? url.indexOf('/', schemeEnd + 3) : url.indexOf('/');
+  const queryStart = url.indexOf('?', pathStart);
+  const hashStart = url.indexOf('#', pathStart);
+  const end = queryStart !== -1 ? queryStart : (hashStart !== -1 ? hashStart : url.length);
+  const path = pathStart !== -1 ? url.substring(pathStart, end).toLowerCase() : '/';
 
-    // Depth penalty: deeper pages = lower priority
-    score -= segments.length * 10;
+  // Depth: count slashes minus 1
+  let depth = 0;
+  for (let i = 1; i < path.length; i++) { if (path[i] === '/') depth++; }
+  score -= depth * 10;
 
-    // High-value page boosts
-    const highValue = ['/', '/home', '/about', '/services', '/products', '/pricing', '/contact', '/features'];
-    if (highValue.some(p => path === p || path === p + '/')) score += 50;
+  // High-value pages (exact match)
+  if (path === '/' || path === '/home' || path === '/about' || path === '/services' || path === '/products' || path === '/pricing' || path === '/contact' || path === '/features') score += 50;
+  // Medium-value (prefix match)
+  else if (path.startsWith('/blog') || path.startsWith('/portfolio') || path.startsWith('/case-stud') || path.startsWith('/testimon') || path.startsWith('/faq')) score += 25;
+  // Low-value (prefix match)
+  else if (path.startsWith('/privacy') || path.startsWith('/terms') || path.startsWith('/cookies') || path.startsWith('/legal') || path.startsWith('/sitemap') || path.startsWith('/robots') || path.startsWith('/wp-')) score -= 40;
 
-    // Medium-value boosts
-    const medValue = ['/blog', '/portfolio', '/case-studies', '/testimonials', '/faq'];
-    if (medValue.some(p => path.startsWith(p))) score += 25;
+  // File type penalty (check last 4 chars)
+  const last4 = path.length >= 4 ? path.substring(path.length - 4) : '';
+  if (last4 === '.pdf' || last4 === '.jpg' || last4 === '.png' || last4 === '.gif' || last4 === '.svg' || last4 === '.zip' || path.endsWith('.jpeg') || path.endsWith('.mp4') || path.endsWith('.mp3')) score -= 60;
 
-    // Low-value penalties
-    const lowValue = ['/privacy', '/terms', '/cookies', '/legal', '/sitemap', '/robots.txt', '/wp-admin', '/wp-login'];
-    if (lowValue.some(p => path.startsWith(p))) score -= 40;
+  // Query param count
+  if (queryStart !== -1) {
+    let params = 1;
+    for (let i = queryStart + 1; i < end; i++) { if (url[i] === '&') params++; }
+    score -= params * 5;
+  }
 
-    // File type penalties
-    if (path.match(/\.(pdf|jpg|jpeg|png|gif|svg|zip|mp4|mp3)$/)) score -= 60;
+  // Hash-only
+  if (hashStart !== -1 && !path.includes('.')) score -= 20;
 
-    // Query param penalty: more params = lower priority
-    score -= u.searchParams.size * 5;
-
-    // Hash-only URLs (same page sections)
-    if (u.hash && !path.includes('.')) score -= 20;
-
-    return Math.max(0, score);
-  } catch { return 50; }
+  return score;
 }
 
 // ── Cookie jar: persist cookies per domain across fetch requests ─────────────
@@ -712,21 +713,21 @@ try {
       if (currentDepth < depth && processedCount < maxPages) {
         const queueBudget = maxPages * 2 - processedCount;
         let added = 0;
-        const newLinks: { url: string; currentDepth: number; score: number }[] = [];
+        const highPriority: { url: string; currentDepth: number }[] = [];
+        const normalPriority: { url: string; currentDepth: number }[] = [];
         for (const link of pageData.links.internal) {
           if (added >= queueBudget) break;
           const linkKey = link.trim().replace(/\/$/, "").toLowerCase();
           if (!visited.has(linkKey) && !isPatternBlocked(link)) {
             visited.add(linkKey);
-            newLinks.push({ url: link, currentDepth: currentDepth + 1, score: scoreLink(link) });
+            const item = { url: link, currentDepth: currentDepth + 1 };
+            if (scoreLink(link) >= 100) highPriority.push(item);
+            else normalPriority.push(item);
             added++;
           }
         }
-        // Insert by priority: higher score = crawled first
-        newLinks.sort((a, b) => b.score - a.score);
-        for (const item of newLinks) {
-          queue.push({ url: item.url, currentDepth: item.currentDepth });
-        }
+        // High priority first, then normal (no sort needed)
+        queue.push(...highPriority, ...normalPriority);
       }
     } else {
       console.log(`Saving fallback restricted page for ${url}`);
