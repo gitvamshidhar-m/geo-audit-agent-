@@ -438,36 +438,24 @@ export default function App() {
   }, [currentUser.userId]);
 
   useEffect(() => {
-    if (!isAuditing) return;
-    const headers: Record<string, string> = {};
-    if (currentUser.userId) headers["x-user-id"] = currentUser.userId;
-    const evtSource = new EventSource("/api/audit/stream");
-    const onMsg = (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.progress !== undefined) setProgress(data.progress);
-        if (!data.is_running) {
-          setIsAuditing(false);
-          setAuditEndTime(Date.now());
-          fetchResults().catch(err => console.error("Post-audit fetch failed", err));
-          evtSource.close();
+    const timer = setInterval(async () => {
+      if (isAuditing) {
+        try {
+          const res = await apiFetch('/api/audit/status');
+          if (!res.ok) throw new Error("Status Fetch Failed");
+          const data = await res.json();
+          setProgress(data.progress);
+          if (!data.is_running) {
+            setIsAuditing(false);
+            setAuditEndTime(Date.now());
+            fetchResults().catch(err => console.error("Post-audit fetch failed", err));
+          }
+        } catch (err) {
+          console.error("Audit status poll failed", err);
         }
-      } catch {}
-    };
-    evtSource.addEventListener("message", onMsg);
-    evtSource.onerror = () => {
-      // Fallback: if SSE fails, do a single status check
-      evtSource.close();
-      apiFetch('/api/audit/status').then(r => r.json()).then(data => {
-        setProgress(data.progress);
-        if (!data.is_running) {
-          setIsAuditing(false);
-          setAuditEndTime(Date.now());
-          fetchResults().catch(() => {});
-        }
-      }).catch(() => {});
-    };
-    return () => evtSource.close();
+      }
+    }, 2000);
+    return () => clearInterval(timer);
   }, [isAuditing, currentUser.userId]);
 
   const [isScanningPlagiarism, setIsScanningPlagiarism] = useState(false);
