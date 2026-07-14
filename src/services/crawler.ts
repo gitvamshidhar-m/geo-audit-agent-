@@ -482,29 +482,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
       // Tier 3: FlareSolverr — REMOVED (crashes on free Render)
 
-      // Tier 4: ScrapingBee — free tier (1000 credits/month)
-      if (!htmlContent && process.env.SCRAPINGBEE_API_KEY) {
-        try {
-          db.updateStatus(userId, true, progress, `ScrapingBee bypass: ${url}`).catch(() => {});
-          const sbUrl = `https://app.scrapingbee.com/api/v1/?api_key=${process.env.SCRAPINGBEE_API_KEY}&url=${encodeURIComponent(url)}&render_js=true`;
-          const ac = new AbortController();
-          const t = setTimeout(() => ac.abort(), SCRAPER_TIMEOUT_MS);
-          const sbRes = await fetch(sbUrl, { signal: ac.signal }).catch(() => null);
-          clearTimeout(t);
-          if (sbRes?.ok) {
-            const text = await sbRes.text().catch(() => '');
-            if (text.length > 50) {
-              htmlContent = text;
-              finalUrl = url;
-              headersMap['x-actual-status'] = sbRes.status.toString();
-              headersMap['x-via'] = 'scrapingbee';
-              updateProfile(url, 'fetch', 0, 0);
-            }
-          }
-        } catch (e: any) {
-          console.error(`ScrapingBee failed for ${url}:`, e.message);
-        }
-      }
+      // Tier 4: ScrapingBee — REMOVED (quota exhausted)
 
       // Tier 5: Free proxy rotation — uses public proxy lists, zero cost
       if (!htmlContent && !quick) {
