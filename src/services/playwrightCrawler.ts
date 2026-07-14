@@ -250,14 +250,15 @@ export interface PlaywrightResult {
 export async function fetchWithPlaywright(
   url: string,
   existingCookies?: string,
-  quick = false
+  quick = false,
+  proxy?: { server: string }
 ): Promise<PlaywrightResult> {
   const viewport = randomItem(VIEWPORTS);
   const userAgent = randomItem(USER_AGENTS);
   const platform = randomItem(PLATFORMS);
 
   const browser = await getBrowser();
-  const context = await browser.newContext({
+  const ctxOpts: any = {
     userAgent,
     viewport,
     locale: randomItem(LANGUAGES)[0],
@@ -265,7 +266,9 @@ export async function fetchWithPlaywright(
     extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
     bypassCSP: true,
     ignoreHTTPSErrors: true,
-  });
+  };
+  if (proxy) ctxOpts.proxy = proxy;
+  const context = await browser.newContext(ctxOpts);
 
   try {
     await context.addInitScript(getStealthInitScript(viewport, platform, userAgent));

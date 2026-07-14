@@ -451,16 +451,17 @@ export async function audit(startUrl: string, config: AuditConfig) {
       const shouldTryPlaywright = !quick && (isLikelySPA || isBlocked403) && !headersMap['x-via'];
 
       if (shouldTryPlaywright) {
-        for (let attempt = 0; attempt < 2; attempt++) {
+        const useProxy = process.env.PLAYWRIGHT_PROXY ? true : false;
+        for (let attempt = 0; attempt < (useProxy ? 3 : 2); attempt++) {
           while (activePlaywrights >= MAX_PLAYWRIGHTS) {
             await new Promise((r) => setTimeout(r, 50));
           }
           activePlaywrights++;
           try {
             const pwStart = Date.now();
-            const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick);
+            const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick, attempt >= 1 ? { server: process.env.PLAYWRIGHT_PROXY! } : undefined);
             const pwElapsed = Date.now() - pwStart;
-            console.log(`Playwright for ${url}: success=${pwResult.success}, elapsed=${pwElapsed}ms, htmlLen=${pwResult.html.length}`);
+            console.log(`Playwright${attempt >= 1 ? '+proxy' : ''} for ${url}: success=${pwResult.success}, elapsed=${pwElapsed}ms, htmlLen=${pwResult.html.length}`);
             if (pwResult.success) {
               htmlContent = pwResult.html;
               finalUrl = pwResult.finalUrl;
@@ -479,7 +480,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           } finally {
             activePlaywrights--;
           }
-          if (attempt === 0) await new Promise(r => setTimeout(r, 500));
+          if (attempt < 2) await new Promise(r => setTimeout(r, 500));
         }
       }
 
