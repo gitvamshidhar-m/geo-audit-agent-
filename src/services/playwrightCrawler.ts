@@ -86,6 +86,33 @@ function releaseBrowser() {
   }
 }
 
+async function launchFreshBrowser(): Promise<Browser> {
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--single-process",
+    "--disable-web-security",
+    "--disable-features=IsolateOrigins,site-per-process",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-font-security",
+    "--disable-rtc-smoothing",
+    "--disable-webrtc",
+    "--disable-webrtc-hw-encoding",
+    "--disable-webrtc-hw-decoding",
+    ...(isRender ? [
+      "--disable-gpu",
+      "--disable-gpu-compositing",
+      "--disable-software-rasterizer",
+      "--no-zygote",
+      "--memory-pressure-off",
+      "--js-flags=--max-old-space-size=128",
+    ] : []),
+  ];
+  const browser = await chromium.launch({ headless: true, args });
+  return browser;
+}
+
 export async function closeBrowser() {
   if (browserTimer) { clearTimeout(browserTimer); browserTimer = null; }
   if (sharedBrowser) {
@@ -253,13 +280,14 @@ export async function fetchWithPlaywright(
   url: string,
   existingCookies?: string,
   quick = false,
-  proxy?: { server: string }
+  proxy?: { server: string; username?: string; password?: string },
+  freshBrowser = false
 ): Promise<PlaywrightResult> {
   const viewport = randomItem(VIEWPORTS);
   const userAgent = randomItem(USER_AGENTS);
   const platform = randomItem(PLATFORMS);
 
-  const browser = await getBrowser();
+  const browser = freshBrowser ? await launchFreshBrowser() : await getBrowser();
   const ctxOpts: any = {
     userAgent,
     viewport,
@@ -341,6 +369,10 @@ export async function fetchWithPlaywright(
     return { html, finalUrl, headers, loadTime, success: html.length > 100, cookies: cookiesStr || undefined };
   } finally {
     await context.close().catch(() => {});
-    releaseBrowser();
+    if (freshBrowser) {
+      try { await browser.close().catch(() => {}); } catch {}
+    } else {
+      releaseBrowser();
+    }
   }
 }

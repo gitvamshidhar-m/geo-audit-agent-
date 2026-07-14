@@ -470,7 +470,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           activePlaywrights++;
           try {
             const pwStart = Date.now();
-            const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick, attempt >= 1 ? proxyConfig : undefined);
+            const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick, attempt >= 1 ? proxyConfig : undefined, attempt >= 1);
             const pwElapsed = Date.now() - pwStart;
             const pwStatus = parseInt(pwResult.headers?.["x-actual-status"] || "200");
             const pwBlocked = pwStatus === 403 || pwStatus === 429;
@@ -487,10 +487,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
               visited.add(fk.replace(/^https?:\/\/(www\.)?/, ""));
               break;
             }
-            // If blocked and proxy retry coming up, close shared browser so a fresh one is launched
-            if (pwBlocked && attempt === 0 && useProxy) {
-              await closePW().catch(() => {});
-            }
+            // If blocked and proxy retry coming up, a fresh browser is spawned by fetchWithPlaywright
           } catch (e: any) {
             lastErrorMessage = `Playwright error (${typeof e}): ${e?.message || e?.code || "unknown"}`;
             console.error("Playwright throw:", lastErrorMessage);
