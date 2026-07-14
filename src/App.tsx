@@ -2021,6 +2021,7 @@ export default function App() {
                               page.via === 'home-proxy' ? "bg-orange-100 text-orange-700" :
                               page.via === 'scrapingbee' ? "bg-amber-100 text-amber-700" :
                               page.via === 'free-proxy' ? "bg-sky-100 text-sky-700" :
+                              page.via === 'wayback' ? "bg-rose-100 text-rose-700" :
                               "bg-slate-100 text-slate-600"
                             )}>
                               {page.via || 'fetch'}

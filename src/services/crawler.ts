@@ -572,6 +572,30 @@ export async function audit(startUrl: string, config: AuditConfig) {
         } catch {}
       }
 
+      // Wayback Machine fallback — works when site blocks data center IPs
+      if (!htmlContent) {
+        try {
+          const wbUrl = `https://web.archive.org/web/2026id_/${url.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), 12000);
+          const wbRes = await fetch(wbUrl, {
+            headers: { "User-Agent": userAgents[0], Accept: "text/html,*/*" },
+            signal: ac.signal,
+          }).catch(() => null);
+          clearTimeout(t);
+          if (wbRes?.ok) {
+            const text = await wbRes.text().catch(() => "");
+            if (text.length > 5000 && (text.includes("<html") || text.includes("<!doctype"))) {
+              htmlContent = text;
+              finalUrl = url;
+              headersMap["x-actual-status"] = String(wbRes.status);
+              headersMap["x-via"] = "wayback";
+              updateProfile(url, "fetch", 0, 0);
+            }
+          }
+        } catch {}
+      }
+
       // Tier 6: ScraperAPI — REMOVED (quota exhausted)
     } catch (e: any) {
       console.error(`Outer crawl logic failed for ${url}:`, e.message);
