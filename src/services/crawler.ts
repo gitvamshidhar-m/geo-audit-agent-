@@ -451,7 +451,18 @@ export async function audit(startUrl: string, config: AuditConfig) {
       const shouldTryPlaywright = !quick && (isLikelySPA || isBlocked403) && !headersMap['x-via'];
 
       if (shouldTryPlaywright) {
-        const useProxy = process.env.PLAYWRIGHT_PROXY ? true : false;
+        // Parse PLAYWRIGHT_PROXY env var into Playwright-compatible proxy config
+        const rawProxy = process.env.PLAYWRIGHT_PROXY || "";
+        let proxyConfig: { server: string; username?: string; password?: string } | undefined;
+        if (rawProxy) {
+          try {
+            const u = new URL(rawProxy.includes("://") ? rawProxy : `http://${rawProxy}`);
+            proxyConfig = { server: `${u.protocol}//${u.host}` };
+            if (u.username) proxyConfig.username = decodeURIComponent(u.username);
+            if (u.password) proxyConfig.password = decodeURIComponent(u.password);
+          } catch { proxyConfig = { server: rawProxy }; }
+        }
+        const useProxy = !!proxyConfig;
         for (let attempt = 0; attempt < (useProxy ? 3 : 2); attempt++) {
           while (activePlaywrights >= MAX_PLAYWRIGHTS) {
             await new Promise((r) => setTimeout(r, 50));
@@ -459,7 +470,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           activePlaywrights++;
           try {
             const pwStart = Date.now();
-            const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick, attempt >= 1 ? { server: process.env.PLAYWRIGHT_PROXY! } : undefined);
+            const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick, attempt >= 1 ? proxyConfig : undefined);
             const pwElapsed = Date.now() - pwStart;
             const pwStatus = parseInt(pwResult.headers?.["x-actual-status"] || "200");
             const pwBlocked = pwStatus === 403 || pwStatus === 429;
