@@ -26,7 +26,7 @@ export function RoadmapItem({ item, index }: { item: any; index: number }) {
 
   return (
     <div
-      whileInView={{ opacity: 1, x: 0 }}
+      style={{ opacity: 1 }}
       className="flex flex-col md:flex-row gap-6 md:gap-8 p-8 md:p-10 rounded-[48px] bg-white/[0.04] border border-white/5 hover:border-blue-500/40 hover:bg-white/[0.07] transition-all group/item backdrop-blur-md relative"
     >
       <div className="flex flex-row md:flex-col items-center justify-between md:justify-start shrink-0">

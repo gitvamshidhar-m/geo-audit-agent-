@@ -47,8 +47,6 @@ async function startServer() {
       groq: 30, openai: 20, anthropic: 15, gemini: 15,
       deepseek: 20, perplexity: 15, huggingface: 5
     };
-      }, 2 * 60 * 1000);
-    }
     const rateLimit = (defaultMax: number, windowMs: number) => (req: any, res: any, next: any) => {
       const userId = (req.headers['x-user-id'] as string) || req.ip || 'unknown';
       const provider = req.body?.provider || 'unknown';
@@ -742,7 +740,7 @@ async function startServer() {
       const stats = await db.getStats(userId);
       if (!stats || pages.length === 0) return res.status(400).json({ error: "No audit data to share" });
       const code = Math.random().toString(36).substring(2, 10);
-      const url = stats.url || req.body.url || "unknown";
+      const url = req.body.url || "unknown";
       await db.saveShareReport(code, userId, url, stats, pages);
       res.json({ code, shareUrl: `${req.protocol}://${req.get('host')}/?shared=${code}` });
     } catch (err: any) {

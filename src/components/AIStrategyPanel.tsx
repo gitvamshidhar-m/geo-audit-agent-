@@ -129,7 +129,7 @@ function NeuralNetworkBackground() {
           </radialGradient>
         </defs>
         {[...Array(30)].map((_, i) => (
-          <motion.circle
+          <circle
             key={i}
             cx={`${Math.random() * 100}%`}
             cy={`${Math.random() * 100}%`}
@@ -1546,7 +1546,7 @@ export function AIStrategyPanel({
                                  <span>{stats?.sentimentTrend ? Math.round((stats.sentimentTrend.positive / stats.totalPages) * 100) : 0}%</span>
                               </div>
                               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                 <div animate={{ width: stats?.sentimentTrend ? `${(stats.sentimentTrend.positive / stats.totalPages) * 100}%` : '0%' }} className="h-full bg-emerald-500" />
+                                  <div style={{ width: stats?.sentimentTrend ? `${(stats.sentimentTrend.positive / stats.totalPages) * 100}%` : '0%' }} className="h-full bg-emerald-500 transition-all duration-500" />
                               </div>
                            </div>
                            <div>
@@ -1555,7 +1555,7 @@ export function AIStrategyPanel({
                                  <span>{stats?.aiRecognitionScore || 0}%</span>
                               </div>
                               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                 <div animate={{ width: `${stats?.aiRecognitionScore || 0}%` }} className="h-full bg-blue-500" />
+                                  <div style={{ width: `${stats?.aiRecognitionScore || 0}%` }} className="h-full bg-blue-500 transition-all duration-500" />
                               </div>
                            </div>
                         </div>

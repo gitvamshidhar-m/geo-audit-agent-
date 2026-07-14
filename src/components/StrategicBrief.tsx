@@ -382,10 +382,10 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                      <span className="text-emerald-400">Achievable in 30 Days</span>
                   </div>
                   <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                     <div
-                        whileInView={{ width: '75%' }}
-                        className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"
-                     />
+                      <div
+                         style={{ width: '75%' }}
+                         className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all duration-500"
+                      />
                   </div>
                </div>
             </div>
@@ -416,10 +416,10 @@ export function StrategicBrief({ pages, stats, auditEndTime, onDownloadPDF, aiIn
                     <span className="text-sm font-black text-slate-900">{metric.value}%</span>
                  </div>
                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      whileInView={{ width: `${metric.value}%` }}
-                      className={`h-full bg-${metric.color}-500 shadow-sm`}
-                    />
+                     <div
+                       style={{ width: `${metric.value}%` }}
+                       className={`h-full bg-${metric.color}-500 shadow-sm transition-all duration-500`}
+                     />
                  </div>
               </div>
             ))}
