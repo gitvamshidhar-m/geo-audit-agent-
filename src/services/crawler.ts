@@ -476,6 +476,10 @@ export async function audit(startUrl: string, config: AuditConfig) {
               visited.add(fk.replace(/^https?:\/\/(www\.)?/, ""));
               break;
             }
+            // If blocked and proxy retry coming up, close shared browser so a fresh one is launched
+            if (pwBlocked && attempt === 0 && useProxy) {
+              closePW().catch(() => {});
+            }
           } catch (e: any) {
             lastErrorMessage = `Playwright error (${typeof e}): ${e?.message || e?.code || "unknown"}`;
             console.error("Playwright throw:", lastErrorMessage);
