@@ -457,7 +457,10 @@ export async function audit(startUrl: string, config: AuditConfig) {
           }
           activePlaywrights++;
           try {
+            const pwStart = Date.now();
             const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick);
+            const pwElapsed = Date.now() - pwStart;
+            console.log(`Playwright for ${url}: success=${pwResult.success}, elapsed=${pwElapsed}ms, htmlLen=${pwResult.html.length}`);
             if (pwResult.success) {
               htmlContent = pwResult.html;
               finalUrl = pwResult.finalUrl;
@@ -471,7 +474,8 @@ export async function audit(startUrl: string, config: AuditConfig) {
               break;
             }
           } catch (e: any) {
-            lastErrorMessage = e.message || "Playwright error";
+            lastErrorMessage = `Playwright error (${typeof e}): ${e?.message || e?.code || "unknown"}`;
+            console.error("Playwright throw:", lastErrorMessage);
           } finally {
             activePlaywrights--;
           }
@@ -589,10 +593,11 @@ export async function audit(startUrl: string, config: AuditConfig) {
         ? `Network Connection Error: ${lastErrorMessage}. Verify the domain is valid and live.`
         : `Website strictly blocks automated bots. Please try testing a different URL that allows standard bots.${scraperHint}`;
 
+      const pwHint = lastErrorMessage.includes("Playwright") ? ` [PW: ${lastErrorMessage}]` : "";
       pageBuffer.push({
           url,
-          title,
-          description,
+          title: title + pwHint,
+          description: description + pwHint,
           statusCode: isConnectionError ? 504 : 403,
           issues: [
             {
