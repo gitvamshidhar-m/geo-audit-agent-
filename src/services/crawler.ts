@@ -318,7 +318,6 @@ export async function audit(startUrl: string, config: AuditConfig) {
   // Don't await sitemapPromise — crawl starts immediately
 
   const MAX_PLAYWRIGHTS = isRender ? 2 : 3;
-  const SCRAPER_TIMEOUT_MS = isRender ? 15000 : 25000;
 
   let processedCount = 0;
   let startedCount = 0;
@@ -514,31 +513,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
         }
       }
 
-      // Tier 6: ScraperAPI — absolute last resort (only when ALL other tiers failed for this specific page)
-      if (!htmlContent && process.env.SCRAPER_API_KEY) {
-        try {
-          const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true`;
-          const ac = new AbortController();
-          const t = setTimeout(() => ac.abort(), SCRAPER_TIMEOUT_MS);
-          const scraperRes = await fetch(scraperUrl, { signal: ac.signal }).catch(() => null);
-          clearTimeout(t);
-          if (scraperRes?.ok) {
-            const text = await scraperRes.text().catch(() => '');
-            if (text.length > 50) {
-              htmlContent = text;
-              finalUrl = url;
-              headersMap['x-actual-status'] = scraperRes.status.toString();
-              headersMap['x-via'] = 'scraperapi';
-              updateProfile(url, 'fetch', 0, 0);
-              db.updateStatus(userId, true, progress, `ScraperAPI bypass: ${url}`).catch(() => {});
-            }
-          } else if (scraperRes) {
-            console.error(`ScraperAPI returned ${scraperRes.status} for ${url}`);
-          }
-        } catch (e: any) {
-          console.error(`ScraperAPI failed for ${url}:`, e.message);
-        }
-      }
+      // Tier 6: ScraperAPI — REMOVED (quota exhausted)
     } catch (e: any) {
       console.error(`Outer crawl logic failed for ${url}:`, e.message);
       lastErrorMessage = e.message || "Unknown crawl error";
