@@ -1966,6 +1966,7 @@ export default function App() {
                           <th className="px-6 py-6 w-16 text-center bg-slate-50">SEL</th>
                           <th className="px-8 py-6 bg-slate-50 italic font-display lowercase tracking-tight text-sm text-slate-500">Endpoint</th>
                           <th className="px-8 py-6 bg-slate-50 italic font-display lowercase tracking-tight text-sm text-slate-500 text-center">Score</th>
+                          <th className="px-8 py-6 bg-slate-50 italic font-display lowercase tracking-tight text-sm text-slate-500 text-center">Via</th>
                           <th className="px-8 py-6 bg-slate-50 italic font-display lowercase tracking-tight text-sm text-slate-500 text-center">T2C Ratio</th>
                           <th className="px-8 py-6 bg-slate-50 italic font-display lowercase tracking-tight text-sm text-slate-500">Asset Health</th>
                           <th className="px-8 py-6 bg-slate-50 italic font-display lowercase tracking-tight text-sm text-slate-500">Detections</th>
@@ -2011,6 +2012,18 @@ export default function App() {
                                 </div>
                               );
                             })()}
+                          </td>
+                          <td className="px-8 py-6 text-center">
+                            <span className={cn(
+                              "inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
+                              page.via === 'playwright' ? "bg-violet-100 text-violet-700" :
+                              page.via === 'scraperapi' ? "bg-red-100 text-red-700" :
+                              page.via === 'scrapingbee' ? "bg-amber-100 text-amber-700" :
+                              page.via === 'free-proxy' ? "bg-sky-100 text-sky-700" :
+                              "bg-slate-100 text-slate-600"
+                            )}>
+                              {page.via || 'fetch'}
+                            </span>
                           </td>
                           <td className="px-8 py-6 text-center">
                             <div className="text-[11px] font-black font-mono group-hover:text-blue-400">{page.textToCodeRatio}%</div>

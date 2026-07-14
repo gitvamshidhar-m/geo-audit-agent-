@@ -251,7 +251,8 @@ export function quickAnalyzeHTML(url: string, html: string, loadTime: number, he
     keywords, sentiment: 'neutral' as const, sentimentScore: 0, topics,
     keywordDensity, textToCodeRatio,
     imageMetrics,
-    geoScore: 50, bodyText
+    geoScore: 50, bodyText,
+    via: headers?.["x-via"] || "fetch"
   };
 }
 
@@ -737,6 +738,7 @@ export function analyzeHTML(url: string, html: string, loadTime: number, headers
       structuredData,
       score: finalScore,
       issues,
+      via: headers?.["x-via"] || "fetch",
       performance,
       keywords,
       sentiment,

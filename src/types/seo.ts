@@ -47,6 +47,7 @@ export interface SEOPage {
   geoAudit?: GEOResult;
   bodyText?: string;
   aiPlagiarism?: AIPlagiarismResult;
+  via?: string;
 }
 
 export interface AIPlagiarismResult {

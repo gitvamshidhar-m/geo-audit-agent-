@@ -422,6 +422,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
           if ((quick && response.status < 400) || (text.length > 50 && response.status < 400 && !looksLikeABlock)) {
             htmlContent = text;
             headersMap["x-actual-status"] = response.status.toString();
+            headersMap["x-via"] = "fetch";
             response.headers.forEach((v: string, k: string) => { headersMap[k] = v; });
             const finalUrlKey = finalUrl.replace(/\/$/, "").toLowerCase();
             visited.add(finalUrlKey);
