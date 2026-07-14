@@ -445,7 +445,27 @@ export async function audit(startUrl: string, config: AuditConfig) {
         lastErrorMessage = e.message || "Fetch failed";
       }
 
-      // Tier 2: Playwright — advanced bypass using playwrightCrawler module
+      // Tier 2: wreq — TLS fingerprint impersonation (bypasses Cloudflare/Datadome at HTTP layer)
+      if (!htmlContent && !headersMap['x-via']) {
+        try {
+          const { fetchWithWreq } = await import("./wreqCrawler.js");
+          const wreqStart = Date.now();
+          const wreqResult = await fetchWithWreq(url, quick);
+          const wreqElapsed = Date.now() - wreqStart;
+          console.log(`wreq for ${url}: success=${wreqResult.success}, elapsed=${wreqElapsed}ms, status=${wreqResult.headers['x-actual-status']}`);
+          if (wreqResult.success && wreqResult.headers['x-actual-status'] !== '403' && wreqResult.headers['x-actual-status'] !== '429') {
+            htmlContent = wreqResult.html;
+            finalUrl = wreqResult.finalUrl;
+            Object.assign(headersMap, wreqResult.headers);
+            pageLoadTime = wreqResult.loadTime;
+            updateProfile(url, 'fetch');
+          }
+        } catch (e: any) {
+          console.error(`wreq failed for ${url}:`, e?.message || e);
+        }
+      }
+
+      // Tier 3: Playwright — browser-based Cloudflare/WAF bypass
       const isLikelySPA = !htmlContent || (htmlContent.length < 800 && htmlContent.toLowerCase().includes('<script') && !htmlContent.toLowerCase().includes('<body'));
       const isBlocked403 = !htmlContent && (lastErrorMessage.includes('403') || lastErrorMessage.toLowerCase().includes('cloudflare') || lastErrorMessage.toLowerCase().includes('block'));
       const shouldTryPlaywright = !quick && (isLikelySPA || isBlocked403) && !headersMap['x-via'];
@@ -500,9 +520,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
 
       // Tier 3: FlareSolverr — REMOVED (crashes on free Render)
 
-      // Tier 4: ScrapingBee — REMOVED (quota exhausted)
-
-      // Tier 5: Free proxy rotation — uses public proxy lists, zero cost
+      // Tier: Free proxy rotation — uses public proxy lists, zero cost
       if (!htmlContent && !quick) {
         const freeProxies = [
           'https://corsproxy.io/?', 'https://api.allorigins.win/raw?url=',

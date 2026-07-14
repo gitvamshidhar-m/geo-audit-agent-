@@ -2017,6 +2017,7 @@ export default function App() {
                             <span className={cn(
                               "inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
                               page.via === 'playwright' ? "bg-violet-100 text-violet-700" :
+                              page.via === 'wreq' ? "bg-emerald-100 text-emerald-700" :
                               page.via === 'scrapingbee' ? "bg-amber-100 text-amber-700" :
                               page.via === 'free-proxy' ? "bg-sky-100 text-sky-700" :
                               "bg-slate-100 text-slate-600"
