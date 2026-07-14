@@ -550,6 +550,28 @@ export async function audit(startUrl: string, config: AuditConfig) {
         }
       }
 
+      // Last resort: HOME_PROXY_URL — routes through your home's residential IP
+      if (!htmlContent && process.env.HOME_PROXY_URL) {
+        try {
+          const hpUrl = `${process.env.HOME_PROXY_URL.replace(/\/$/, "")}/${encodeURIComponent(url)}`;
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), 15000);
+          const hpRes = await fetch(hpUrl, { signal: ac.signal }).catch(() => null);
+          clearTimeout(t);
+          if (hpRes?.ok) {
+            const text = await hpRes.text().catch(() => "");
+            const proxiedStatus = parseInt(hpRes.headers.get("x-proxied-status") || "200");
+            if (text.length > 100 && proxiedStatus < 400) {
+              htmlContent = text;
+              finalUrl = url;
+              headersMap["x-actual-status"] = String(proxiedStatus);
+              headersMap["x-via"] = "home-proxy";
+              updateProfile(url, "fetch", 0, 0);
+            }
+          }
+        } catch {}
+      }
+
       // Tier 6: ScraperAPI — REMOVED (quota exhausted)
     } catch (e: any) {
       console.error(`Outer crawl logic failed for ${url}:`, e.message);
