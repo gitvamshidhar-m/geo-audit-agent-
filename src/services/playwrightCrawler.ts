@@ -62,6 +62,8 @@ async function getBrowser(): Promise<Browser> {
     "--disable-webrtc-hw-decoding",
     ...(isRender ? [
       "--disable-gpu",
+      "--disable-gpu-compositing",
+      "--disable-software-rasterizer",
       "--no-zygote",
       "--memory-pressure-off",
       "--js-flags=--max-old-space-size=128",

@@ -478,7 +478,7 @@ export async function audit(startUrl: string, config: AuditConfig) {
             }
             // If blocked and proxy retry coming up, close shared browser so a fresh one is launched
             if (pwBlocked && attempt === 0 && useProxy) {
-              closePW().catch(() => {});
+              await closePW().catch(() => {});
             }
           } catch (e: any) {
             lastErrorMessage = `Playwright error (${typeof e}): ${e?.message || e?.code || "unknown"}`;
