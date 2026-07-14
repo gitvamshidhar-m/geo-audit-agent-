@@ -461,8 +461,10 @@ export async function audit(startUrl: string, config: AuditConfig) {
             const pwStart = Date.now();
             const pwResult = await fetchWithPlaywright(url, getCookieHeader(url), quick, attempt >= 1 ? { server: process.env.PLAYWRIGHT_PROXY! } : undefined);
             const pwElapsed = Date.now() - pwStart;
-            console.log(`Playwright${attempt >= 1 ? '+proxy' : ''} for ${url}: success=${pwResult.success}, elapsed=${pwElapsed}ms, htmlLen=${pwResult.html.length}`);
-            if (pwResult.success) {
+            const pwStatus = parseInt(pwResult.headers?.["x-actual-status"] || "200");
+            const pwBlocked = pwStatus === 403 || pwStatus === 429;
+            console.log(`Playwright${attempt >= 1 ? '+proxy' : ''} for ${url}: success=${pwResult.success}, status=${pwStatus}, elapsed=${pwElapsed}ms, htmlLen=${pwResult.html.length}`);
+            if (pwResult.success && !pwBlocked) {
               htmlContent = pwResult.html;
               finalUrl = pwResult.finalUrl;
               Object.assign(headersMap, pwResult.headers);
